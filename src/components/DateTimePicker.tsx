@@ -75,7 +75,7 @@ export function DateTimePicker({ label, value, onChange }: DateTimePickerProps) 
                 type="button"
                 onClick={() => setMonth(prev => addMonths(prev, -1))}
                 className="grid h-8 w-8 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-100"
-                title="Mes anterior"
+                title="Mês anterior"
               >
                 <ChevronLeft size={15} />
               </button>
@@ -87,7 +87,7 @@ export function DateTimePicker({ label, value, onChange }: DateTimePickerProps) 
                 type="button"
                 onClick={() => setMonth(prev => addMonths(prev, 1))}
                 className="grid h-8 w-8 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-100"
-                title="Proximo mes"
+                title="Próximo mês"
               >
                 <ChevronRight size={15} />
               </button>
@@ -154,7 +154,7 @@ export function DateTimePicker({ label, value, onChange }: DateTimePickerProps) 
                 Hoje 09:00
               </button>
               <button type="button" onClick={() => setQuick(1, '09:00')} className="rounded-xl border border-gray-200 px-2 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50">
-                Amanha
+                Amanhã
               </button>
               <button type="button" onClick={() => setOpen(false)} className="rounded-xl bg-blue-600 px-2 py-2 text-xs font-semibold text-white hover:bg-blue-700">
                 Pronto

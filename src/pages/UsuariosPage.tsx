@@ -46,7 +46,7 @@ export function UsuariosPage() {
       const { data } = await api.usuarios(getToken)
       setUsuarios(data)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Falha ao carregar usuarios.')
+      toast.error(error instanceof Error ? error.message : 'Falha ao carregar usuários.')
     } finally {
       setLoading(false)
     }
@@ -80,9 +80,9 @@ export function UsuariosPage() {
       })
       setForm(emptyForm)
       await load()
-      toast.success('Usuario salvo.')
+      toast.success('Usuário salvo.')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Falha ao salvar usuario.')
+      toast.error(error instanceof Error ? error.message : 'Falha ao salvar usuário.')
     } finally {
       setSaving(false)
     }
@@ -92,9 +92,9 @@ export function UsuariosPage() {
     try {
       const { data } = await api.updateUsuario(getToken, id, body)
       setUsuarios(prev => prev.map(item => item.id === id ? data : item))
-      toast.success('Usuario atualizado.')
+      toast.success('Usuário atualizado.')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Falha ao atualizar usuario.')
+      toast.error(error instanceof Error ? error.message : 'Falha ao atualizar usuário.')
     }
   }
 
@@ -104,8 +104,8 @@ export function UsuariosPage() {
         <div className="mx-auto flex max-w-[1320px] items-center gap-3">
           <img src={logoSrc} alt="Safe Horse" className="h-8 object-contain" />
           <div>
-            <h1 className="text-sm font-bold text-gray-950">Usuarios CS/CX</h1>
-            <p className="text-xs text-gray-400">Nomeacao de admin e CS</p>
+            <h1 className="text-sm font-bold text-gray-950">Usuários CS/CX</h1>
+            <p className="text-xs text-gray-400">Nomeação de admin e CS</p>
           </div>
           <div className="flex-1" />
           <Link
@@ -162,7 +162,7 @@ export function UsuariosPage() {
               <input
                 value={form.nome}
                 onChange={event => updateForm('nome', event.target.value)}
-                placeholder="Nome do usuario"
+                placeholder="Nome do usuário"
                 className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
               />
             </label>
@@ -196,7 +196,7 @@ export function UsuariosPage() {
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
             >
               {saving ? <LoaderCircle size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-              Salvar usuario
+              Salvar usuário
             </button>
           </div>
         </section>
@@ -204,7 +204,7 @@ export function UsuariosPage() {
         <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
           <div className="flex items-center gap-2 border-b border-gray-100 p-4">
             <UsersRound size={16} className="text-blue-500" />
-            <h2 className="text-sm font-semibold text-gray-950">Usuarios nomeados</h2>
+            <h2 className="text-sm font-semibold text-gray-950">Usuários nomeados</h2>
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">{usuarios.length}</span>
           </div>
 
@@ -213,7 +213,7 @@ export function UsuariosPage() {
               <LoaderCircle className="animate-spin" size={28} />
             </div>
           ) : usuarios.length === 0 ? (
-            <p className="py-16 text-center text-sm text-gray-400">Nenhum usuario nomeado.</p>
+            <p className="py-16 text-center text-sm text-gray-400">Nenhum usuário nomeado.</p>
           ) : (
             <div className="divide-y divide-gray-100">
               {usuarios.map(usuario => (

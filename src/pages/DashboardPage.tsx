@@ -104,7 +104,7 @@ export function DashboardPage() {
     const email = user?.primaryEmailAddress?.emailAddress
     if (!email) return
     api.syncUsuario(getToken, { email, nome: user.fullName }).catch(() => {
-      // A nomeacao nao bloqueia o uso do app.
+      // A nomeação não bloqueia o uso do app.
     })
   }, [user?.id])
 
@@ -149,7 +149,7 @@ export function DashboardPage() {
       await api.addInteracao(getToken, selected.id, { tipo: 'nota', descricao: note.trim() })
       setNote('')
       await openDetail(selected.id)
-      toast.success('Historico atualizado.')
+      toast.success('Histórico atualizado.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao salvar nota.')
     }
@@ -159,7 +159,7 @@ export function DashboardPage() {
     if (!selected?.numero_pedido) return
     try {
       const { data } = await api.pcpPedido(getToken, selected.numero_pedido)
-      if (!data) toast.warning('Pedido nao encontrado no PCP.')
+      if (!data) toast.warning('Pedido não encontrado no PCP.')
       else toast.success('Pedido encontrado no PCP.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao consultar PCP.')
@@ -192,7 +192,7 @@ export function DashboardPage() {
           <Link
             to="/usuarios"
             className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
-            title="Usuarios"
+            title="Usuários"
           >
             <UsersRound size={15} />
           </Link>
@@ -243,7 +243,7 @@ export function DashboardPage() {
                 <input
                   value={responsavel}
                   onChange={event => { setResponsavel(event.target.value); setPage(1) }}
-                  placeholder="Responsavel"
+                  placeholder="Responsável"
                   className="h-10 w-40 rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 />
                 <button
@@ -279,12 +279,12 @@ export function DashboardPage() {
                           <StatusBadge status={item.status} />
                           <PriorityBadge value={item.prioridade} />
                         </div>
-                        <p className="mt-1 truncate text-sm text-gray-600">{item.cliente ?? 'Cliente nao informado'}</p>
-                        <p className="mt-0.5 truncate text-xs text-gray-400">{item.descricao_produto ?? item.motivo ?? 'Sem descricao'}</p>
+                        <p className="mt-1 truncate text-sm text-gray-600">{item.cliente ?? 'Cliente não informado'}</p>
+                        <p className="mt-0.5 truncate text-xs text-gray-400">{item.descricao_produto ?? item.motivo ?? 'Sem descrição'}</p>
                       </div>
                       <div className="hidden text-right text-xs text-gray-400 sm:block">
                         <p>{date(item.data_solicitacao)}</p>
-                        <p>{item.responsavel ?? 'Sem responsavel'}</p>
+                        <p>{item.responsavel ?? 'Sem responsável'}</p>
                       </div>
                       <ChevronRight size={16} className="text-gray-300" />
                     </button>
@@ -310,7 +310,7 @@ export function DashboardPage() {
                       disabled={page >= totalPages}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
                     >
-                      Proxima
+                      Próxima
                       <ChevronRight size={14} />
                     </button>
                   </div>
@@ -446,8 +446,8 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
         <div className="sticky top-0 z-10 border-b border-gray-100 bg-white p-5">
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
-              <h2 className="truncate text-xl font-bold text-gray-950">Pedido #{selected.numero_pedido ?? 'sem numero'}</h2>
-              <p className="mt-1 truncate text-sm text-gray-500">{selected.cliente ?? 'Cliente nao informado'}</p>
+              <h2 className="truncate text-xl font-bold text-gray-950">Pedido #{selected.numero_pedido ?? 'sem número'}</h2>
+              <p className="mt-1 truncate text-sm text-gray-500">{selected.cliente ?? 'Cliente não informado'}</p>
             </div>
             <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={onClose}>
               <X size={18} />
@@ -470,22 +470,22 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
             <div className="grid gap-3 sm:grid-cols-2">
               <Info label="ID cliente" value={selected.codigo_cliente} />
               <Info label="Produto" value={selected.descricao_produto} />
-              <Info label="Codigo produto" value={selected.codigo_produto} />
+              <Info label="Código produto" value={selected.codigo_produto} />
               <Info label="Quantidade" value={selected.quantidade?.toString()} />
               <Info label="Valor unitario" value={money(selected.valor_unitario)} />
               <Info label="Valor total" value={money(selected.valor_total)} />
               <Info label="Setor" value={selected.setor} />
-              <Info label="Responsavel" value={selected.responsavel} />
+              <Info label="Responsável" value={selected.responsavel} />
               <Info label="Vendedor" value={selected.vendedor} />
               <Info label="Novo pedido" value={selected.novo_pedido} />
             </div>
 
             <section>
-              <h3 className="mb-2 text-sm font-semibold text-gray-950">Situacao</h3>
+              <h3 className="mb-2 text-sm font-semibold text-gray-950">Situação</h3>
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed text-gray-700">
                 <p className="font-medium text-gray-900">{selected.motivo ?? 'Sem motivo informado'}</p>
                 {selected.descricao_situacao && <p className="mt-2 whitespace-pre-wrap">{selected.descricao_situacao}</p>}
-                {selected.proxima_acao && <p className="mt-2 text-blue-700">Proxima acao: {selected.proxima_acao}</p>}
+                {selected.proxima_acao && <p className="mt-2 text-blue-700">Próxima ação: {selected.proxima_acao}</p>}
               </div>
             </section>
 
@@ -524,7 +524,7 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
             </section>
 
             <section>
-              <h3 className="mb-2 text-sm font-semibold text-gray-950">Historico</h3>
+              <h3 className="mb-2 text-sm font-semibold text-gray-950">Histórico</h3>
               <div className="space-y-2">
                 {(selected.interacoes ?? []).map(item => (
                   <div key={item.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
@@ -623,7 +623,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
     try {
       const { data } = await api.pcpPedido(getToken, codigo)
       if (!data) {
-        toast.warning('Pedido nao encontrado no PCP.')
+        toast.warning('Pedido não encontrado no PCP.')
         return
       }
       applyPedido(data)
@@ -640,7 +640,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
     try {
       if (kind === 'setor') await api.createSetor(getToken, value)
       else await api.createResponsavel(getToken, value)
-      toast.success(kind === 'setor' ? 'Setor cadastrado.' : 'Responsavel cadastrado.')
+      toast.success(kind === 'setor' ? 'Setor cadastrado.' : 'Responsável cadastrado.')
       onCadastroChanged()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao cadastrar.')
@@ -652,7 +652,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
     if (!selectedItems.length) return toast.warning('Selecione pelo menos um produto.')
     if (!form.motivo.trim()) return toast.warning('Informe o motivo.')
     if (!form.setor.trim()) return toast.warning('Informe o setor.')
-    if (!form.responsavel.trim()) return toast.warning('Informe o responsavel.')
+    if (!form.responsavel.trim()) return toast.warning('Informe o responsável.')
 
     setSaving(true)
     try {
@@ -777,7 +777,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
                 <Info label="Cliente" value={form.cliente} />
                 <Info label="Vendedor" value={form.vendedor} />
                 <Info label={selectedItems.length > 1 ? 'Produtos' : 'Produto'} value={form.descricao_produto} />
-                <Info label={selectedItems.length > 1 ? 'Codigos produtos' : 'Codigo produto'} value={form.codigo_produto} />
+                <Info label={selectedItems.length > 1 ? 'Códigos produtos' : 'Código produto'} value={form.codigo_produto} />
                 <Info label="Quantidade" value={form.quantidade} />
                 <Info label="Valor total" value={money(form.valor_total)} />
               </div>
@@ -819,12 +819,12 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
                   onChange={value => update('responsavel', value)}
                   onCreate={() => createCadastro('responsavel')}
                 />
-                <Field label="Proxima acao" value={form.proxima_acao} onChange={value => update('proxima_acao', value)} />
+                <Field label="Próxima ação" value={form.proxima_acao} onChange={value => update('proxima_acao', value)} />
                 <DateTimePicker label="Agendado para" value={form.agendado_para} onChange={value => update('agendado_para', value)} />
                 <SelectField label="Prioridade" value={form.prioridade} options={[...PRIORIDADES]} onChange={value => update('prioridade', value)} />
                 <Field label="Novo pedido" value={form.novo_pedido} onChange={value => update('novo_pedido', value)} />
                 <label className="sm:col-span-2">
-                  <span className="mb-1 block text-xs font-medium text-gray-500">Descricao da situacao</span>
+                  <span className="mb-1 block text-xs font-medium text-gray-500">Descrição da situação</span>
                   <textarea
                     value={form.descricao_situacao}
                     onChange={event => update('descricao_situacao', event.target.value)}
@@ -1000,7 +1000,7 @@ function ResponsavelListbox({ value, options, onChange, onCreate }: {
 
   return (
     <div className="relative">
-      <span className="mb-1 block text-xs font-medium text-gray-500">Responsavel</span>
+      <span className="mb-1 block text-xs font-medium text-gray-500">Responsável</span>
       <div className="flex gap-2">
         <div className="relative min-w-0 flex-1">
           <UserPlus size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1024,7 +1024,7 @@ function ResponsavelListbox({ value, options, onChange, onCreate }: {
           {open && (
             <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
               {filtered.length === 0 ? (
-                <div className="px-3 py-3 text-sm text-gray-400">Nenhum responsavel encontrado.</div>
+                <div className="px-3 py-3 text-sm text-gray-400">Nenhum responsável encontrado.</div>
               ) : (
                 <div className="max-h-56 overflow-y-auto p-1" role="listbox">
                   {filtered.map(option => {
@@ -1057,7 +1057,7 @@ function ResponsavelListbox({ value, options, onChange, onCreate }: {
           onClick={onCreate}
           disabled={!value.trim() || exists}
           className="grid h-10 w-10 place-items-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 disabled:opacity-40"
-          title="Cadastrar responsavel"
+          title="Cadastrar responsável"
         >
           <UserPlus size={15} />
         </button>

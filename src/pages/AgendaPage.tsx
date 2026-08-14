@@ -61,7 +61,7 @@ export function AgendaPage() {
     const email = user?.primaryEmailAddress?.emailAddress
     if (!email) return
     api.syncUsuario(getToken, { email, nome: user.fullName }).catch(() => {
-      // A nomeacao nao bloqueia o uso do app.
+      // A nomeação não bloqueia o uso do app.
     })
   }, [user?.id])
 
@@ -113,7 +113,7 @@ export function AgendaPage() {
           <img src={logoSrc} alt="Safe Horse" className="h-8 object-contain" />
           <div>
             <h1 className="text-sm font-bold text-gray-950">Agenda CS/CX</h1>
-            <p className="text-xs text-gray-400">Calendario de atendimentos</p>
+            <p className="text-xs text-gray-400">Calendário de atendimentos</p>
           </div>
           <div className="flex-1" />
           <Link
@@ -134,7 +134,7 @@ export function AgendaPage() {
           <Link
             to="/usuarios"
             className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
-            title="Usuarios"
+            title="Usuários"
           >
             <UsersRound size={15} />
           </Link>
@@ -161,7 +161,7 @@ export function AgendaPage() {
                 type="button"
                 onClick={() => setMonth(prev => addMonths(prev, -1))}
                 className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
-                title="Mes anterior"
+                title="Mês anterior"
               >
                 <ChevronLeft size={16} />
               </button>
@@ -173,7 +173,7 @@ export function AgendaPage() {
                 type="button"
                 onClick={() => setMonth(prev => addMonths(prev, 1))}
                 className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
-                title="Proximo mes"
+                title="Próximo mês"
               >
                 <ChevronRight size={16} />
               </button>
@@ -184,7 +184,7 @@ export function AgendaPage() {
               <input
                 value={search}
                 onChange={event => setSearch(event.target.value)}
-                placeholder="Buscar pedido, cliente ou responsavel..."
+                placeholder="Buscar pedido, cliente ou responsável..."
                 className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm outline-none transition-colors focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
               />
             </div>
@@ -196,7 +196,7 @@ export function AgendaPage() {
                 className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors ${mode === 'calendar' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
               >
                 <Grid3X3 size={13} />
-                Calendario
+                Calendário
               </button>
               <button
                 type="button"
@@ -281,12 +281,12 @@ export function AgendaPage() {
                         <span className="font-semibold text-gray-950">#{item.numero_pedido ?? 'sem pedido'}</span>
                         <StatusBadge status={item.status} />
                       </div>
-                      <p className="mt-1 truncate text-sm text-gray-600">{item.cliente ?? 'Cliente nao informado'}</p>
-                      <p className="mt-0.5 truncate text-xs text-gray-400">{item.proxima_acao ?? item.descricao_produto ?? item.motivo ?? 'Sem descricao'}</p>
+                      <p className="mt-1 truncate text-sm text-gray-600">{item.cliente ?? 'Cliente não informado'}</p>
+                      <p className="mt-0.5 truncate text-xs text-gray-400">{item.proxima_acao ?? item.descricao_produto ?? item.motivo ?? 'Sem descrição'}</p>
                     </div>
                     <div className="hidden text-right text-xs text-gray-500 sm:block">
                       <p className="font-semibold text-gray-900">{dateTime(item.agendado_para)}</p>
-                      <p>{item.responsavel ?? 'Sem responsavel'}</p>
+                      <p>{item.responsavel ?? 'Sem responsável'}</p>
                     </div>
                     <ChevronRight size={16} className="text-gray-300" />
                   </button>
@@ -314,8 +314,8 @@ function AgendaDetail({ item, loading, onClose }: { item: Atendimento; loading: 
       <div className="drawer-panel-in ml-auto h-full w-full max-w-xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-start gap-3 border-b border-gray-100 bg-white p-5">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-xl font-bold text-gray-950">Pedido #{item.numero_pedido ?? 'sem numero'}</h2>
-            <p className="mt-1 truncate text-sm text-gray-500">{item.cliente ?? 'Cliente nao informado'}</p>
+            <h2 className="truncate text-xl font-bold text-gray-950">Pedido #{item.numero_pedido ?? 'sem número'}</h2>
+            <p className="mt-1 truncate text-sm text-gray-500">{item.cliente ?? 'Cliente não informado'}</p>
           </div>
           <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={onClose}>
             <X size={18} />
@@ -333,16 +333,16 @@ function AgendaDetail({ item, loading, onClose }: { item: Atendimento; loading: 
                 <Clock3 size={16} />
                 {dateTime(item.agendado_para)}
               </div>
-              <p className="mt-2 text-sm text-blue-800">{item.proxima_acao ?? 'Sem proxima acao informada.'}</p>
+              <p className="mt-2 text-sm text-blue-800">{item.proxima_acao ?? 'Sem próxima ação informada.'}</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Info label="Responsavel" value={item.responsavel} />
+              <Info label="Responsável" value={item.responsavel} />
               <Info label="Status" value={item.status} />
               <Info label="Produto" value={item.descricao_produto} />
               <Info label="Setor" value={item.setor} />
             </div>
             <section>
-              <h3 className="mb-2 text-sm font-semibold text-gray-950">Situacao</h3>
+              <h3 className="mb-2 text-sm font-semibold text-gray-950">Situação</h3>
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed text-gray-700">
                 <p className="font-medium text-gray-900">{item.motivo ?? 'Sem motivo informado'}</p>
                 {item.descricao_situacao && <p className="mt-2 whitespace-pre-wrap">{item.descricao_situacao}</p>}

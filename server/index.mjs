@@ -16,7 +16,7 @@ const PCP_API_KEY = process.env.PCP_API_KEY || ''
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173'
 
 if (!DATABASE_URL) {
-  console.warn('DATABASE_URL nao configurado. O servidor vai iniciar, mas as rotas de banco falharao.')
+  console.warn('DATABASE_URL não configurado. O servidor vai iniciar, mas as rotas de banco falharão.')
 }
 
 const pool = new Pool({
@@ -78,8 +78,8 @@ async function requireAuth(req, res, next) {
 
   const auth = req.header('authorization') || ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  if (!token) return res.status(401).json({ error: 'Autenticacao obrigatoria.' })
-  if (!jwks) return res.status(500).json({ error: 'CLERK_JWKS_URL nao configurado no backend.' })
+  if (!token) return res.status(401).json({ error: 'Autenticação obrigatória.' })
+  if (!jwks) return res.status(500).json({ error: 'CLERK_JWKS_URL não configurado no backend.' })
 
   try {
     const options = CLERK_JWT_ISSUER ? { issuer: CLERK_JWT_ISSUER } : undefined
@@ -87,7 +87,7 @@ async function requireAuth(req, res, next) {
     req.auth = payload
     return next()
   } catch {
-    return res.status(401).json({ error: 'Sessao invalida ou expirada.' })
+    return res.status(401).json({ error: 'Sessão inválida ou expirada.' })
   }
 }
 
@@ -199,7 +199,7 @@ app.get('/api/usuarios', asyncRoute(async (_req, res) => {
 app.post('/api/usuarios/me', asyncRoute(async (req, res) => {
   const email = normalizeEmail(req.body.email)
   const nome = stringOrNull(req.body.nome)
-  if (!email) return res.status(400).json({ error: 'Informe o email do usuario.' })
+  if (!email) return res.status(400).json({ error: 'Informe o email do usuário.' })
 
   const found = await pool.query(`
     select *
@@ -235,7 +235,7 @@ app.post('/api/usuarios', asyncRoute(async (req, res) => {
   const nome = stringOrNull(req.body.nome)
   const papel = normalizePapel(req.body.papel)
   const ativo = req.body.ativo === undefined ? true : Boolean(req.body.ativo)
-  if (!email) return res.status(400).json({ error: 'Informe o email do usuario.' })
+  if (!email) return res.status(400).json({ error: 'Informe o email do usuário.' })
 
   const found = await pool.query('select id from cscx_usuarios where lower(email) = $1 limit 1', [email])
   if (found.rows[0]) {
@@ -264,7 +264,7 @@ app.patch('/api/usuarios/:id', asyncRoute(async (req, res) => {
 
   if ('email' in req.body) {
     const email = normalizeEmail(req.body.email)
-    if (!email) return res.status(400).json({ error: 'Informe um email valido.' })
+    if (!email) return res.status(400).json({ error: 'Informe um email válido.' })
     values.push(email)
     fields.push(`email = $${values.length}`)
   }
@@ -281,7 +281,7 @@ app.patch('/api/usuarios/:id', asyncRoute(async (req, res) => {
     fields.push(`ativo = $${values.length}`)
   }
 
-  if (!fields.length) return res.status(400).json({ error: 'Nenhum campo valido para atualizar.' })
+  if (!fields.length) return res.status(400).json({ error: 'Nenhum campo válido para atualizar.' })
   values.push(req.params.id)
   const { rows } = await pool.query(`
     update cscx_usuarios
@@ -289,7 +289,7 @@ app.patch('/api/usuarios/:id', asyncRoute(async (req, res) => {
     where id = $${values.length}
     returning *
   `, values)
-  if (!rows[0]) return res.status(404).json({ error: 'Usuario nao encontrado.' })
+  if (!rows[0]) return res.status(404).json({ error: 'Usuário não encontrado.' })
   res.json({ data: rows[0] })
 }))
 
@@ -307,7 +307,7 @@ app.post('/api/cadastros/setores', asyncRoute(async (req, res) => {
 
 app.post('/api/cadastros/responsaveis', asyncRoute(async (req, res) => {
   const nome = stringOrNull(req.body.nome)
-  if (!nome) return res.status(400).json({ error: 'Informe o responsavel.' })
+  if (!nome) return res.status(400).json({ error: 'Informe o responsável.' })
   const { rows } = await pool.query(`
     insert into cscx_responsaveis (nome)
     values ($1)
@@ -364,7 +364,7 @@ app.get('/api/atendimentos', asyncRoute(async (req, res) => {
 
 app.get('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   const atendimento = await pool.query('select * from cscx_atendimentos where id = $1', [req.params.id])
-  if (!atendimento.rows[0]) return res.status(404).json({ error: 'Atendimento nao encontrado.' })
+  if (!atendimento.rows[0]) return res.status(404).json({ error: 'Atendimento não encontrado.' })
 
   const [interacoes, agenda] = await Promise.all([
     pool.query('select * from cscx_interacoes where atendimento_id = $1 order by realizado_em desc', [req.params.id]),
@@ -395,7 +395,7 @@ app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
     values.push(field === 'status' ? normalizaStatus(req.body[field]) : req.body[field] || null)
     sets.push(`${field} = $${values.length}`)
   }
-  if (!sets.length) return res.status(400).json({ error: 'Nenhum campo valido para atualizar.' })
+  if (!sets.length) return res.status(400).json({ error: 'Nenhum campo válido para atualizar.' })
   values.push(getUserId(req))
   sets.push(`updated_by_clerk_user_id = $${values.length}`)
   values.push(req.params.id)
@@ -405,14 +405,14 @@ app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
     where id = $${values.length}
     returning *
   `, values)
-  if (!rows[0]) return res.status(404).json({ error: 'Atendimento nao encontrado.' })
+  if (!rows[0]) return res.status(404).json({ error: 'Atendimento não encontrado.' })
   res.json({ data: rows[0] })
 }))
 
 app.post('/api/atendimentos/:id/interacoes', asyncRoute(async (req, res) => {
   const tipo = String(req.body.tipo || 'nota')
   const descricao = String(req.body.descricao || '').trim()
-  if (!descricao) return res.status(400).json({ error: 'Informe a descricao da interacao.' })
+  if (!descricao) return res.status(400).json({ error: 'Informe a descrição da interação.' })
   const { rows } = await pool.query(`
     insert into cscx_interacoes (atendimento_id, tipo, descricao, criado_por_clerk_user_id)
     values ($1, $2, $3, $4)
@@ -424,7 +424,7 @@ app.post('/api/atendimentos/:id/interacoes', asyncRoute(async (req, res) => {
 app.post('/api/agendamentos', asyncRoute(async (req, res) => {
   const titulo = String(req.body.titulo || '').trim()
   const inicio = req.body.inicio
-  if (!titulo || !inicio) return res.status(400).json({ error: 'Titulo e inicio sao obrigatorios.' })
+  if (!titulo || !inicio) return res.status(400).json({ error: 'Título e início são obrigatórios.' })
   const { rows } = await pool.query(`
     insert into cscx_agendamentos (atendimento_id, titulo, inicio, fim, responsavel, observacao, criado_por_clerk_user_id)
     values ($1, $2, $3, $4, $5, $6, $7)
@@ -442,7 +442,7 @@ app.post('/api/agendamentos', asyncRoute(async (req, res) => {
 }))
 
 app.get('/api/pcp/pedidos/:codigo', asyncRoute(async (req, res) => {
-  if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integracao PCP nao configurada.' })
+  if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
   const codigo = encodeURIComponent(req.params.codigo)
   const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
   const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?codigo_venda=eq.${codigo}&select=${select}`, {
