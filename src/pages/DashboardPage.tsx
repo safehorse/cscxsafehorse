@@ -1524,18 +1524,20 @@ function PriorityBadge({ value }: { value?: string }) {
 }
 
 function date(value?: string | null) {
-  if (!value) return '-'
-  return new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR')
+  const parsed = parseDateOnly(value)
+  return parsed ? parsed.toLocaleDateString('pt-BR') : '-'
 }
 
 function shortDate(value?: string | null) {
-  if (!value) return '-'
-  return new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+  const parsed = parseDateOnly(value)
+  return parsed ? parsed.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '-'
 }
 
 function dateTime(value?: string | null) {
   if (!value) return '-'
-  return new Date(value).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '-'
+  return parsed.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 function money(value?: string | number | null) {
@@ -1618,8 +1620,34 @@ function atendimentoToForm(item: Atendimento): WizardForm {
 }
 
 function toDateInput(value?: string | null) {
-  if (!value) return ''
-  const parsed = new Date(value)
-  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10)
-  return value.slice(0, 10)
+  const parsed = parseDateOnly(value)
+  if (!parsed) return ''
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`
+}
+
+function parseDateOnly(value?: string | null) {
+  if (!value) return null
+  const text = String(value).trim()
+  if (!text) return null
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (iso) {
+    const parsed = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), 12)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+  const br = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/)
+  if (br) {
+    const year = Number(br[3].length === 2 ? `20${br[3]}` : br[3])
+    const parsed = new Date(year, Number(br[2]) - 1, Number(br[1]), 12)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+  if (/^\d+([,.]\d+)?$/.test(text)) {
+    const serial = Number(text.replace(',', '.'))
+    if (Number.isFinite(serial)) {
+      const epoch = new Date(Date.UTC(1899, 11, 30))
+      epoch.setUTCDate(epoch.getUTCDate() + serial)
+      return new Date(epoch.getUTCFullYear(), epoch.getUTCMonth(), epoch.getUTCDate(), 12)
+    }
+  }
+  const parsed = new Date(text)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
 }

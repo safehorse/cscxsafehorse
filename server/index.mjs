@@ -58,17 +58,23 @@ function toNumberOrNull(value) {
 function toDateOrNull(value) {
   if (!value) return null
   if (value instanceof Date) return value.toISOString().slice(0, 10)
-  if (typeof value === 'number') {
+  if (typeof value === 'number' && Number.isFinite(value)) {
     const excelEpoch = new Date(Date.UTC(1899, 11, 30))
     excelEpoch.setUTCDate(excelEpoch.getUTCDate() + value)
     return excelEpoch.toISOString().slice(0, 10)
   }
   const text = String(value).trim()
   if (!text) return null
-  const br = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (br) return `${br[3]}-${br[2].padStart(2, '0')}-${br[1].padStart(2, '0')}`
+  if (/^\d+([,.]\d+)?$/.test(text)) return toDateOrNull(Number(text.replace(',', '.')))
+  const br = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/)
+  if (br) {
+    const year = br[3].length === 2 ? `20${br[3]}` : br[3]
+    return `${year}-${br[2].padStart(2, '0')}-${br[1].padStart(2, '0')}`
+  }
   const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (iso) return iso[0]
+  const parsed = new Date(text)
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10)
   return null
 }
 

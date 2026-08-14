@@ -422,10 +422,14 @@ function monthLabel(date: Date) {
 
 function dateTime(value?: string | null) {
   if (!value) return '-'
-  return new Date(value).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '-'
+  return parsed.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 function time(value?: string | null) {
   if (!value) return '-'
-  return new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '-'
+  return parsed.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }

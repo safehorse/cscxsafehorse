@@ -329,5 +329,7 @@ function invitationLabel(usuario: Usuario) {
 
 function date(value?: string | null) {
   if (!value) return '-'
-  return new Date(value).toLocaleDateString('pt-BR')
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '-'
+  return parsed.toLocaleDateString('pt-BR')
 }

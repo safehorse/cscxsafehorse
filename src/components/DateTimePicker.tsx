@@ -169,6 +169,13 @@ export function DateTimePicker({ label, value, onChange }: DateTimePickerProps) 
 
 function parseLocalDateTime(value: string) {
   if (!value) return null
+  const isoDate = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (isoDate) return new Date(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3]), 9, 0)
+  const br = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/)
+  if (br) {
+    const year = Number(br[3].length === 2 ? `20${br[3]}` : br[3])
+    return new Date(year, Number(br[2]) - 1, Number(br[1]), 9, 0)
+  }
   const parsed = new Date(value)
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
