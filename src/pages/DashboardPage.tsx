@@ -418,10 +418,28 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
   note: string
   setNote: (value: string) => void
   onClose: () => void
-  onSaveStatus: (status: string) => void
+  onSaveStatus: (status: string) => Promise<void>
   onAddNote: () => void
   onConsultPcp: () => void
 }) {
+  const [draftStatus, setDraftStatus] = useState(selected.status)
+  const [savingStatus, setSavingStatus] = useState(false)
+  const statusChanged = draftStatus !== selected.status
+
+  useEffect(() => {
+    setDraftStatus(selected.status)
+  }, [selected.id, selected.status])
+
+  async function saveDraftStatus() {
+    if (!statusChanged) return
+    setSavingStatus(true)
+    try {
+      await onSaveStatus(draftStatus)
+    } finally {
+      setSavingStatus(false)
+    }
+  }
+
   return (
     <div className="drawer-backdrop-in fixed inset-0 z-30 bg-gray-950/30 p-4 backdrop-blur-sm" onMouseDown={onClose}>
       <div className="drawer-panel-in ml-auto h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
@@ -476,9 +494,9 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
                 <button
                   key={option}
                   type="button"
-                  onClick={() => onSaveStatus(option)}
+                  onClick={() => setDraftStatus(option)}
                   className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
-                    selected.status === option
+                    draftStatus === option
                       ? 'border-blue-300 bg-blue-50 text-blue-700'
                       : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                   }`}
@@ -486,6 +504,15 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
                   {option}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={saveDraftStatus}
+                disabled={!statusChanged || savingStatus}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+              >
+                {savingStatus ? <LoaderCircle size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                Salvar status
+              </button>
               <button
                 type="button"
                 onClick={onConsultPcp}
