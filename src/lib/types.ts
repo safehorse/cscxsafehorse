@@ -20,6 +20,10 @@ export interface Atendimento {
   descricao_situacao: string | null
   prioridade: 'baixa' | 'normal' | 'alta' | 'urgente'
   agendado_para: string | null
+  concluido_em: string | null
+  reembolso_valor: number | null
+  reembolso_motivo: string | null
+  reembolso_em: string | null
   pcp_pedido_id?: string | null
   pcp_item_id?: string | null
   pcp_payload?: unknown
@@ -67,6 +71,10 @@ export interface DashboardData {
     total: number
     abertos: number
     hoje: number
+    atendimentos_hoje: number
+    solucionados_hoje: number
+    reembolsados: number
+    valor_reembolso: string
     valor_total: string
   }
   proximos: Atendimento[]

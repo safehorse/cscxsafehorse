@@ -31,7 +31,7 @@ import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, PcpPedidoI
 
 const STATUS_OPTIONS = ['ABERTO', 'AGUARDANDO DEVOLUÇÃO', 'FINALIZADO', 'EM ANÁLISE', 'EM PRODUÇÃO', 'CRÉDITO GERADO', 'TROCA GERADA']
 const PRIORIDADES = ['baixa', 'normal', 'alta', 'urgente'] as const
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 
 const emptyWizard = {
   data_solicitacao: new Date().toISOString().slice(0, 10),
@@ -133,13 +133,35 @@ export function DashboardPage() {
   async function saveStatus(nextStatus: string) {
     if (!selected) return
     try {
-      const { data } = await api.updateAtendimento(getToken, selected.id, { status: nextStatus })
+      const isDone = ['FINALIZADO', 'CONCLUIDO'].includes(nextStatus)
+      const { data } = await api.updateAtendimento(getToken, selected.id, {
+        status: nextStatus,
+        concluido_em: isDone ? selected.concluido_em ?? new Date().toISOString() : null,
+      })
       setSelected(prev => prev ? { ...prev, ...data } : data)
       setAtendimentos(prev => prev.map(item => item.id === data.id ? { ...item, ...data } : item))
       toast.success('Status atualizado.')
       load()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao atualizar.')
+    }
+  }
+
+  async function saveReembolso(valor: number | null, motivo: string) {
+    if (!selected) return
+    try {
+      const hasRefund = valor !== null || motivo.trim()
+      const { data } = await api.updateAtendimento(getToken, selected.id, {
+        reembolso_valor: valor,
+        reembolso_motivo: motivo.trim() || null,
+        reembolso_em: hasRefund ? selected.reembolso_em ?? new Date().toISOString() : null,
+      })
+      setSelected(prev => prev ? { ...prev, ...data } : data)
+      setAtendimentos(prev => prev.map(item => item.id === data.id ? { ...item, ...data } : item))
+      toast.success('Reembolso salvo.')
+      load()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao salvar reembolso.')
     }
   }
 
@@ -219,6 +241,12 @@ export function DashboardPage() {
             <Metric label="Agenda hoje" value={dashboard?.totais.hoje ?? 0} loading={loading} tone="amber" />
             <Metric label="Valor envolvido" value={money(dashboard?.totais.valor_total)} loading={loading} tone="emerald" />
           </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric label="Atendimentos hoje" value={dashboard?.totais.atendimentos_hoje ?? 0} loading={loading} />
+            <Metric label="Solucionados hoje" value={dashboard?.totais.solucionados_hoje ?? 0} loading={loading} tone="emerald" />
+            <Metric label="Reembolsados" value={dashboard?.totais.reembolsados ?? 0} loading={loading} tone="amber" />
+            <Metric label="Valor reembolsado" value={money(dashboard?.totais.valor_reembolso)} loading={loading} tone="blue" />
+          </div>
 
           <div className="rounded-2xl border border-gray-200 bg-white">
             <div className="border-b border-gray-100 p-4">
@@ -278,6 +306,9 @@ export function DashboardPage() {
                           <span className="font-semibold text-gray-950">#{item.numero_pedido ?? 'sem pedido'}</span>
                           <StatusBadge status={item.status} />
                           <PriorityBadge value={item.prioridade} />
+                          {(item.reembolso_valor || item.reembolso_motivo) && (
+                            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Reembolso</span>
+                          )}
                         </div>
                         <p className="mt-1 truncate text-sm text-gray-600">{item.cliente ?? 'Cliente não informado'}</p>
                         <p className="mt-0.5 truncate text-xs text-gray-400">{item.descricao_produto ?? item.motivo ?? 'Sem descrição'}</p>
@@ -389,6 +420,7 @@ export function DashboardPage() {
           setNote={setNote}
           onClose={() => setSelected(null)}
           onSaveStatus={saveStatus}
+          onSaveReembolso={saveReembolso}
           onAddNote={addNote}
           onConsultPcp={consultPcp}
         />
@@ -412,23 +444,31 @@ export function DashboardPage() {
   )
 }
 
-function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus, onAddNote, onConsultPcp }: {
+function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus, onSaveReembolso, onAddNote, onConsultPcp }: {
   selected: Atendimento
   loading: boolean
   note: string
   setNote: (value: string) => void
   onClose: () => void
   onSaveStatus: (status: string) => Promise<void>
+  onSaveReembolso: (valor: number | null, motivo: string) => Promise<void>
   onAddNote: () => void
   onConsultPcp: () => void
 }) {
   const [draftStatus, setDraftStatus] = useState(selected.status)
   const [savingStatus, setSavingStatus] = useState(false)
+  const [showReembolso, setShowReembolso] = useState(Boolean(selected.reembolso_valor || selected.reembolso_motivo))
+  const [reembolsoValor, setReembolsoValor] = useState(selected.reembolso_valor != null ? String(selected.reembolso_valor) : '')
+  const [reembolsoMotivo, setReembolsoMotivo] = useState(selected.reembolso_motivo ?? '')
+  const [savingReembolso, setSavingReembolso] = useState(false)
   const statusChanged = draftStatus !== selected.status
 
   useEffect(() => {
     setDraftStatus(selected.status)
-  }, [selected.id, selected.status])
+    setShowReembolso(Boolean(selected.reembolso_valor || selected.reembolso_motivo))
+    setReembolsoValor(selected.reembolso_valor != null ? String(selected.reembolso_valor) : '')
+    setReembolsoMotivo(selected.reembolso_motivo ?? '')
+  }, [selected.id, selected.status, selected.reembolso_valor, selected.reembolso_motivo])
 
   async function saveDraftStatus() {
     if (!statusChanged) return
@@ -437,6 +477,18 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
       await onSaveStatus(draftStatus)
     } finally {
       setSavingStatus(false)
+    }
+  }
+
+  async function saveRefund() {
+    const valor = reembolsoValor.trim() ? Number(reembolsoValor.replace(',', '.')) : null
+    if (valor !== null && !Number.isFinite(valor)) return toast.warning('Informe um valor de reembolso válido.')
+    if ((valor !== null || reembolsoMotivo.trim()) && !reembolsoMotivo.trim()) return toast.warning('Informe o motivo do reembolso.')
+    setSavingReembolso(true)
+    try {
+      await onSaveReembolso(valor, reembolsoMotivo)
+    } finally {
+      setSavingReembolso(false)
     }
   }
 
@@ -474,6 +526,7 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
               <Info label="Quantidade" value={selected.quantidade?.toString()} />
               <Info label="Valor unitario" value={money(selected.valor_unitario)} />
               <Info label="Valor total" value={money(selected.valor_total)} />
+              <Info label="Valor reembolso" value={money(selected.reembolso_valor)} />
               <Info label="Setor" value={selected.setor} />
               <Info label="Responsável" value={selected.responsavel} />
               <Info label="Vendedor" value={selected.vendedor} />
@@ -488,6 +541,50 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
                 {selected.proxima_acao && <p className="mt-2 text-blue-700">Próxima ação: {selected.proxima_acao}</p>}
               </div>
             </section>
+
+            {(selected.reembolso_valor || selected.reembolso_motivo || showReembolso) && (
+              <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-amber-950">Reembolso</h3>
+                    <p className="text-xs text-amber-700">Valor e motivo preenchidos manualmente.</p>
+                  </div>
+                  {selected.reembolso_em && <span className="text-xs font-semibold text-amber-700">{dateTime(selected.reembolso_em)}</span>}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+                  <label>
+                    <span className="mb-1 block text-xs font-medium text-amber-800">Valor</span>
+                    <input
+                      value={reembolsoValor}
+                      onChange={event => setReembolsoValor(event.target.value)}
+                      placeholder="0,00"
+                      inputMode="decimal"
+                      className="h-10 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1 block text-xs font-medium text-amber-800">Motivo</span>
+                    <input
+                      value={reembolsoMotivo}
+                      onChange={event => setReembolsoMotivo(event.target.value)}
+                      placeholder="Motivo do reembolso..."
+                      className="h-10 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                    />
+                  </label>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={saveRefund}
+                    disabled={savingReembolso}
+                    className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+                  >
+                    {savingReembolso ? <LoaderCircle size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                    Salvar reembolso
+                  </button>
+                </div>
+              </section>
+            )}
 
             <section className="flex flex-wrap gap-2">
               {STATUS_OPTIONS.map(option => (
@@ -512,6 +609,14 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
               >
                 {savingStatus ? <LoaderCircle size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
                 Salvar status
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowReembolso(prev => !prev)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+              >
+                <Plus size={13} />
+                Reembolso
               </button>
               <button
                 type="button"

@@ -112,6 +112,10 @@ app.get('/api/dashboard', asyncRoute(async (_req, res) => {
         count(*)::int as total,
         count(*) filter (where upper(status) not in ('FINALIZADO', 'CONCLUIDO', 'CANCELADO'))::int as abertos,
         count(*) filter (where agendado_para::date = current_date)::int as hoje,
+        count(*) filter (where created_at::date = current_date)::int as atendimentos_hoje,
+        count(*) filter (where upper(status) in ('FINALIZADO', 'CONCLUIDO') and coalesce(concluido_em, updated_at)::date = current_date)::int as solucionados_hoje,
+        count(*) filter (where reembolso_valor is not null or nullif(trim(coalesce(reembolso_motivo, '')), '') is not null)::int as reembolsados,
+        coalesce(sum(reembolso_valor), 0)::numeric as valor_reembolso,
         coalesce(sum(valor_total), 0)::numeric as valor_total
       from cscx_atendimentos
     `),
@@ -418,6 +422,7 @@ app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
     'quantidade', 'valor_unitario', 'valor_total', 'motivo', 'setor', 'responsavel',
     'proxima_acao', 'status', 'novo_pedido', 'cliente_tem_desconto', 'vendedor',
     'descricao_situacao', 'prioridade', 'agendado_para', 'concluido_em',
+    'reembolso_valor', 'reembolso_motivo', 'reembolso_em',
     'pcp_pedido_id', 'pcp_item_id', 'pcp_payload',
   ]
   const sets = []
@@ -524,6 +529,10 @@ function atendimentoFromBody(body) {
     origem_linha: Number.isFinite(Number(body.origem_linha ?? body.origemLinha)) ? Number(body.origem_linha ?? body.origemLinha) : null,
     prioridade: body.prioridade || 'normal',
     agendado_para: body.agendado_para || body.agendadoPara || null,
+    concluido_em: body.concluido_em || body.concluidoEm || null,
+    reembolso_valor: toNumberOrNull(body.reembolso_valor ?? body.reembolsoValor),
+    reembolso_motivo: stringOrNull(body.reembolso_motivo ?? body.reembolsoMotivo),
+    reembolso_em: body.reembolso_em || body.reembolsoEm || null,
     pcp_pedido_id: stringOrNull(body.pcp_pedido_id ?? body.pcpPedidoId),
     pcp_item_id: stringOrNull(body.pcp_item_id ?? body.pcpItemId),
     pcp_payload: body.pcp_payload ?? body.pcpPayload ?? null,
@@ -586,6 +595,7 @@ async function upsertAtendimento(row, userId) {
     'quantidade', 'valor_unitario', 'valor_total', 'motivo', 'setor', 'responsavel',
     'proxima_acao', 'status', 'novo_pedido', 'cliente_tem_desconto', 'vendedor',
     'descricao_situacao', 'origem_planilha_aba', 'origem_linha', 'prioridade', 'agendado_para',
+    'concluido_em', 'reembolso_valor', 'reembolso_motivo', 'reembolso_em',
     'pcp_pedido_id', 'pcp_item_id', 'pcp_payload',
   ]
   const values = fields.map(field => row[field] ?? null)
