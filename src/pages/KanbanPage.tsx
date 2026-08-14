@@ -43,6 +43,8 @@ export function KanbanPage() {
   const [search, setSearch] = useState('')
   const [columnOrder, setColumnOrder] = useState<string[]>(() => loadColumnOrder())
   const [draggingStatus, setDraggingStatus] = useState<string | null>(null)
+  const [draggingItemId, setDraggingItemId] = useState<string | null>(null)
+  const [dragOverStatus, setDragOverStatus] = useState<string | null>(null)
 
   const statuses = useMemo(() => {
     const found = unique(items.map(item => item.status).filter(Boolean))
@@ -105,6 +107,28 @@ export function KanbanPage() {
     if (from < 0 || to < 0) return
     persistOrder(arrayMove(statuses, from, to))
     setDraggingStatus(null)
+  }
+
+  async function dropCard(targetStatus: string) {
+    const itemId = draggingItemId
+    setDraggingItemId(null)
+    setDragOverStatus(null)
+    if (!itemId) return
+    const item = items.find(entry => entry.id === itemId)
+    if (!item || item.status === targetStatus) return
+    const previousStatus = item.status
+    setItems(prev => prev.map(entry => entry.id === itemId ? { ...entry, status: targetStatus } : entry))
+    try {
+      await api.updateAtendimento(getToken, itemId, { status: targetStatus })
+    } catch (error) {
+      setItems(prev => prev.map(entry => entry.id === itemId ? { ...entry, status: previousStatus } : entry))
+      toast.error(error instanceof Error ? error.message : 'Falha ao mover chamado.')
+    }
+  }
+
+  function handleColumnDrop(targetStatus: string) {
+    if (draggingItemId) dropCard(targetStatus)
+    else if (draggingStatus) dropColumn(targetStatus)
   }
 
   useEffect(() => {
@@ -214,9 +238,13 @@ export function KanbanPage() {
                   return (
                     <article
                       key={status}
-                      onDragOver={event => event.preventDefault()}
-                      onDrop={() => dropColumn(status)}
-                      className={`flex h-[calc(100vh-226px)] w-80 shrink-0 flex-col rounded-2xl border bg-white shadow-sm transition-all ${draggingStatus === status ? 'scale-[0.99] opacity-60' : ''} ${tone.card}`}
+                      onDragOver={event => {
+                        event.preventDefault()
+                        if (draggingItemId) setDragOverStatus(status)
+                      }}
+                      onDragLeave={() => setDragOverStatus(prev => prev === status ? null : prev)}
+                      onDrop={() => handleColumnDrop(status)}
+                      className={`flex h-[calc(100vh-226px)] w-80 shrink-0 flex-col rounded-2xl border bg-white shadow-sm transition-all ${draggingStatus === status ? 'scale-[0.99] opacity-60' : ''} ${dragOverStatus === status ? 'ring-2 ring-blue-400' : ''} ${tone.card}`}
                     >
                       <div
                         draggable
@@ -259,7 +287,16 @@ export function KanbanPage() {
                             <Link
                               key={item.id}
                               to={`/chamados?abrir=${item.id}`}
-                              className="block rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50"
+                              draggable
+                              onDragStart={event => {
+                                event.dataTransfer.effectAllowed = 'move'
+                                setDraggingItemId(item.id)
+                              }}
+                              onDragEnd={() => {
+                                setDraggingItemId(null)
+                                setDragOverStatus(null)
+                              }}
+                              className={`block cursor-grab rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 active:cursor-grabbing ${draggingItemId === item.id ? 'opacity-40' : ''}`}
                             >
                               <div className="mb-2 flex items-start justify-between gap-2">
                                 <p className="min-w-0 truncate text-sm font-bold text-gray-950">#{item.numero_pedido ?? 'sem pedido'}</p>

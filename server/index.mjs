@@ -572,22 +572,22 @@ app.post('/api/agendamentos', asyncRoute(async (req, res) => {
   res.status(201).json({ data: rows[0] })
 }))
 
-app.get('/api/whatsapp/status', asyncRoute(async (_req, res) => {
-  res.json({ data: getWhatsappStatus() })
+app.get('/api/whatsapp/status', asyncRoute(async (req, res) => {
+  res.json({ data: getWhatsappStatus(getUserId(req)) })
 }))
 
-app.post('/api/whatsapp/connect', asyncRoute(async (_req, res) => {
-  await ensureWhatsappClient()
-  res.json({ data: getWhatsappStatus() })
+app.post('/api/whatsapp/connect', asyncRoute(async (req, res) => {
+  await ensureWhatsappClient(getUserId(req))
+  res.json({ data: getWhatsappStatus(getUserId(req)) })
 }))
 
-app.post('/api/whatsapp/disconnect', asyncRoute(async (_req, res) => {
-  await disconnectWhatsapp()
-  res.json({ data: getWhatsappStatus() })
+app.post('/api/whatsapp/disconnect', asyncRoute(async (req, res) => {
+  await disconnectWhatsapp(getUserId(req))
+  res.json({ data: getWhatsappStatus(getUserId(req)) })
 }))
 
-app.get('/api/whatsapp/chats', asyncRoute(async (_req, res) => {
-  const client = getReadyWhatsappClient()
+app.get('/api/whatsapp/chats', asyncRoute(async (req, res) => {
+  const client = getReadyWhatsappClient(getUserId(req))
   const chats = await client.getChats()
   const rows = []
   for (const chat of chats.filter(item => !item.isGroup).slice(0, 60)) {
@@ -615,7 +615,7 @@ app.get('/api/whatsapp/chats', asyncRoute(async (_req, res) => {
 }))
 
 app.get('/api/whatsapp/chats/:chatId/messages', asyncRoute(async (req, res) => {
-  const client = getReadyWhatsappClient()
+  const client = getReadyWhatsappClient(getUserId(req))
   const limit = Math.min(Math.max(Number(req.query.limit || 40), 5), 80)
   const chat = await client.getChatById(req.params.chatId)
   const messages = await chat.fetchMessages({ limit })
@@ -988,72 +988,130 @@ async function hydrateItemValuesFromHistory(pedido) {
   }
 }
 
-let whatsappClient = null
-let whatsappState = {
-  status: 'desconectado',
-  qr: null,
-  erro: null,
-  startedAt: null,
-  connectedAt: null,
-  updatedAt: new Date().toISOString(),
+const whatsappSessions = new Map()
+let whatsappLaunchingUserId = null
+
+function whatsappClientId(userId) {
+  return `cscx-${String(userId || 'service').replace(/[^a-zA-Z0-9_-]/g, '_')}`
 }
 
-function setWhatsappState(next) {
-  whatsappState = { ...whatsappState, ...next, updatedAt: new Date().toISOString() }
+async function destroyWhatsappClient(client) {
+  await Promise.race([
+    client.destroy().catch(() => null),
+    new Promise(resolve => setTimeout(resolve, 4000)),
+  ])
 }
 
-function getWhatsappStatus() {
+function getWhatsappSession(userId) {
+  let session = whatsappSessions.get(userId)
+  if (!session) {
+    session = {
+      client: null,
+      state: {
+        status: 'desconectado',
+        qr: null,
+        erro: null,
+        startedAt: null,
+        connectedAt: null,
+        updatedAt: new Date().toISOString(),
+      },
+    }
+    whatsappSessions.set(userId, session)
+  }
+  return session
+}
+
+function setWhatsappState(userId, next) {
+  const session = getWhatsappSession(userId)
+  session.state = { ...session.state, ...next, updatedAt: new Date().toISOString() }
+}
+
+function getWhatsappStatus(userId) {
+  const { state } = getWhatsappSession(userId)
   return {
-    status: whatsappState.status,
-    qr: whatsappState.qr,
-    erro: whatsappState.erro,
-    connected_at: whatsappState.connectedAt,
-    updated_at: whatsappState.updatedAt,
+    status: state.status,
+    qr: state.qr,
+    erro: state.erro,
+    connected_at: state.connectedAt,
+    updated_at: state.updatedAt,
   }
 }
 
-async function ensureWhatsappClient() {
-  if (whatsappClient && whatsappState.status === 'iniciando' && whatsappState.startedAt) {
-    const elapsed = Date.now() - new Date(whatsappState.startedAt).getTime()
-    if (elapsed > 60_000) await disconnectWhatsapp({ clearSession: true })
+async function ensureWhatsappClient(userId) {
+  const session = getWhatsappSession(userId)
+  if (session.client && session.state.status === 'iniciando' && session.state.startedAt) {
+    const elapsed = Date.now() - new Date(session.state.startedAt).getTime()
+    if (elapsed > 90_000) await disconnectWhatsapp(userId)
   }
-  if (whatsappClient) return whatsappClient
+  if (session.client) return session.client
 
-  setWhatsappState({ status: 'iniciando', erro: null, startedAt: new Date().toISOString() })
-  whatsappClient = new WhatsappClient({
+  if (whatsappLaunchingUserId && whatsappLaunchingUserId !== userId) {
+    const error = new Error('Outro atendente está conectando o WhatsApp agora. Aguarde alguns segundos e tente novamente.')
+    error.status = 409
+    throw error
+  }
+  whatsappLaunchingUserId = userId
+
+  setWhatsappState(userId, { status: 'iniciando', erro: null, startedAt: new Date().toISOString() })
+  const client = new WhatsappClient({
     authStrategy: new LocalAuth({
-      clientId: 'cscx-safehorse',
+      clientId: whatsappClientId(userId),
       dataPath: WHATSAPP_SESSION_PATH,
     }),
     puppeteer: {
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      protocolTimeout: 120_000,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
+        '--disable-site-isolation-trials',
+        '--disable-features=IsolateOrigins,site-per-process,Translate,MediaRouter',
+        '--renderer-process-limit=1',
+        '--js-flags=--max-old-space-size=192',
+      ],
     },
   })
+  session.client = client
 
-  whatsappClient.on('qr', async qr => {
+  const clearLaunchLock = () => {
+    if (whatsappLaunchingUserId === userId) whatsappLaunchingUserId = null
+  }
+
+  client.on('qr', async qr => {
+    clearLaunchLock()
     const dataUrl = await qrcode.toDataURL(qr, { margin: 1, width: 320 })
-    setWhatsappState({ status: 'aguardando_qr', qr: dataUrl, erro: null })
+    setWhatsappState(userId, { status: 'aguardando_qr', qr: dataUrl, erro: null })
   })
 
-  whatsappClient.on('authenticated', () => {
-    setWhatsappState({ status: 'autenticado', qr: null, erro: null })
+  client.on('authenticated', () => {
+    clearLaunchLock()
+    setWhatsappState(userId, { status: 'autenticado', qr: null, erro: null })
   })
 
-  whatsappClient.on('ready', () => {
-    setWhatsappState({ status: 'conectado', qr: null, erro: null, connectedAt: new Date().toISOString() })
+  client.on('ready', () => {
+    clearLaunchLock()
+    setWhatsappState(userId, { status: 'conectado', qr: null, erro: null, connectedAt: new Date().toISOString() })
   })
 
-  whatsappClient.on('auth_failure', message => {
-    setWhatsappState({ status: 'erro', erro: message || 'Falha na autenticaÃ§Ã£o do WhatsApp.' })
+  client.on('auth_failure', async message => {
+    clearLaunchLock()
+    setWhatsappState(userId, { status: 'erro', erro: message || 'Falha na autenticaÃ§Ã£o do WhatsApp.' })
+    if (session.client === client) session.client = null
+    await destroyWhatsappClient(client)
   })
 
-  whatsappClient.on('disconnected', reason => {
-    setWhatsappState({ status: 'desconectado', qr: null, erro: reason || null, connectedAt: null })
-    whatsappClient = null
+  client.on('disconnected', async reason => {
+    clearLaunchLock()
+    setWhatsappState(userId, { status: 'desconectado', qr: null, erro: reason || null, connectedAt: null })
+    if (session.client === client) session.client = null
+    await destroyWhatsappClient(client)
   })
 
-  whatsappClient.on('message', async message => {
+  client.on('message', async message => {
     try {
       if (message.fromMe || message.from?.endsWith('@g.us')) return
       const chat = await message.getChat()
@@ -1071,45 +1129,44 @@ async function ensureWhatsappClient() {
     }
   })
 
-  whatsappClient.initialize().catch(error => {
-    setWhatsappState({ status: 'erro', erro: error.message || 'Falha ao iniciar WhatsApp Web.' })
-    whatsappClient = null
+  client.initialize().catch(async error => {
+    clearLaunchLock()
+    setWhatsappState(userId, { status: 'erro', erro: error.message || 'Falha ao iniciar WhatsApp Web.' })
+    if (session.client === client) session.client = null
+    await destroyWhatsappClient(client)
   })
 
-  return whatsappClient
+  return client
 }
 
-function getReadyWhatsappClient() {
-  if (!whatsappClient || whatsappState.status !== 'conectado') {
+function getReadyWhatsappClient(userId) {
+  const session = getWhatsappSession(userId)
+  if (!session.client || session.state.status !== 'conectado') {
     const error = new Error('WhatsApp ainda nÃ£o conectado.')
     error.status = 409
     throw error
   }
-  return whatsappClient
+  return session.client
 }
 
-async function disconnectWhatsapp() {
-  return resetWhatsappClient({ clearSession: true })
+async function disconnectWhatsapp(userId) {
+  return resetWhatsappClient(userId, { clearSession: true })
 }
 
-async function resetWhatsappClient({ clearSession = false } = {}) {
-  if (!whatsappClient) {
-    if (clearSession) await clearWhatsappSession()
-    setWhatsappState({ status: 'desconectado', qr: null, erro: null, startedAt: null, connectedAt: null })
-    return
+async function resetWhatsappClient(userId, { clearSession = false } = {}) {
+  const session = getWhatsappSession(userId)
+  if (session.client) {
+    const client = session.client
+    session.client = null
+    await destroyWhatsappClient(client)
   }
-  const client = whatsappClient
-  whatsappClient = null
-  await Promise.race([
-    client.destroy().catch(() => null),
-    new Promise(resolve => setTimeout(resolve, 4000)),
-  ])
-  if (clearSession) await clearWhatsappSession()
-  setWhatsappState({ status: 'desconectado', qr: null, erro: null, startedAt: null, connectedAt: null })
+  if (whatsappLaunchingUserId === userId) whatsappLaunchingUserId = null
+  if (clearSession) await clearWhatsappSession(userId)
+  setWhatsappState(userId, { status: 'desconectado', qr: null, erro: null, startedAt: null, connectedAt: null })
 }
 
-async function clearWhatsappSession() {
-  await fs.rm(`${WHATSAPP_SESSION_PATH}/session-cscx-safehorse`, { recursive: true, force: true }).catch(() => null)
+async function clearWhatsappSession(userId) {
+  await fs.rm(`${WHATSAPP_SESSION_PATH}/session-${whatsappClientId(userId)}`, { recursive: true, force: true }).catch(() => null)
   await fs.mkdir(WHATSAPP_SESSION_PATH, { recursive: true }).catch(() => null)
 }
 

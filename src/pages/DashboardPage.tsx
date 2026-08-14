@@ -272,14 +272,16 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
               Voltar
             </Link>
           )}
-          <button
-            type="button"
-            onClick={() => load()}
-            className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
-            title="Atualizar"
-          >
-            <RefreshCw size={15} />
-          </button>
+          {isChamadosPage && (
+            <button
+              type="button"
+              onClick={() => load()}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
+              title="Atualizar"
+            >
+              <RefreshCw size={15} />
+            </button>
+          )}
           <Link
             to="/chamados"
             className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors ${isChamadosPage ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
@@ -557,6 +559,9 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
           loading={detailLoading}
           note={note}
           setNote={setNote}
+          getToken={getToken}
+          cadastros={cadastros}
+          onCadastroChanged={reloadCadastros}
           onClose={() => setSelected(null)}
           onSaveStatus={saveStatus}
           onSaveAtendimento={saveAtendimentoChanges}
@@ -584,11 +589,14 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
   )
 }
 
-function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido }: {
+function DetailDrawer({ selected, loading, note, setNote, getToken, cadastros, onCadastroChanged, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido }: {
   selected: Atendimento
   loading: boolean
   note: string
   setNote: (value: string) => void
+  getToken: () => Promise<string | null>
+  cadastros: CadastroOptions
+  onCadastroChanged: () => void
   onClose: () => void
   onSaveStatus: (status: string) => Promise<void>
   onSaveAtendimento: (id: string, form: WizardForm) => Promise<void>
@@ -664,6 +672,19 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
 
   function updateEdit(key: keyof WizardForm, value: string) {
     setEditForm(prev => ({ ...prev, [key]: value }))
+  }
+
+  async function createCadastro(kind: 'setor' | 'responsavel') {
+    const value = (kind === 'setor' ? editForm.setor : editForm.responsavel).trim()
+    if (!value) return
+    try {
+      if (kind === 'setor') await api.createSetor(getToken, value)
+      else await api.createResponsavel(getToken, value)
+      toast.success(kind === 'setor' ? 'Setor cadastrado.' : 'Responsável cadastrado.')
+      onCadastroChanged()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao cadastrar.')
+    }
   }
 
   async function saveEdit() {
@@ -743,8 +764,21 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
                   <Field label="Vendedor" value={editForm.vendedor} onChange={value => updateEdit('vendedor', value)} />
                   <Field label="Motivo" value={editForm.motivo} onChange={value => updateEdit('motivo', value)} />
                   <SelectField label="Status" value={editForm.status} options={STATUS_OPTIONS} onChange={value => updateEdit('status', value)} />
-                  <Field label="Setor" value={editForm.setor} onChange={value => updateEdit('setor', value)} />
-                  <Field label="Responsável" value={editForm.responsavel} onChange={value => updateEdit('responsavel', value)} />
+                  <CadastroField
+                    label="Setor"
+                    value={editForm.setor}
+                    options={cadastros.setores}
+                    listId="edit-setores-list"
+                    icon={<Building2 size={15} />}
+                    onChange={value => updateEdit('setor', value)}
+                    onCreate={() => createCadastro('setor')}
+                  />
+                  <ResponsavelListbox
+                    value={editForm.responsavel}
+                    options={cadastros.responsaveis}
+                    onChange={value => updateEdit('responsavel', value)}
+                    onCreate={() => createCadastro('responsavel')}
+                  />
                   <Field label="Próxima ação" value={editForm.proxima_acao} onChange={value => updateEdit('proxima_acao', value)} />
                   <DateTimePicker label="Agendado para" value={editForm.agendado_para} onChange={value => updateEdit('agendado_para', value)} />
                   <SelectField label="Prioridade" value={editForm.prioridade} options={[...PRIORIDADES]} onChange={value => updateEdit('prioridade', value)} />
@@ -1299,7 +1333,7 @@ function Metric({ label, value, loading, tone = 'gray' }: { label: string; value
 }
 
 function AtendimentosPorDataChart({ rows, loading }: { rows: DashboardData['por_data']; loading: boolean }) {
-  const max = Math.max(1, ...rows.map(row => row.total))
+  const max = Math.max(1, ...rows.flatMap(row => [row.total, row.solucionados]))
   const total = rows.reduce((sum, row) => sum + row.total, 0)
 
   return (
@@ -1312,7 +1346,6 @@ function AtendimentosPorDataChart({ rows, loading }: { rows: DashboardData['por_
         <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-gray-500">
           <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-500" /> Total</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Solucionados</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" /> Reembolsados</span>
         </div>
       </div>
 
@@ -1331,17 +1364,21 @@ function AtendimentosPorDataChart({ rows, loading }: { rows: DashboardData['por_
         <div className="overflow-x-auto pb-1">
           <div className="flex h-56 min-w-max items-end gap-2">
             {rows.map(row => {
-              const totalHeight = Math.max(12, Math.round((row.total / max) * 156))
-              const solvedHeight = row.total ? Math.max(3, Math.round((row.solucionados / row.total) * totalHeight)) : 0
-              const refundHeight = row.total ? Math.max(0, Math.round((row.reembolsados / row.total) * totalHeight)) : 0
+              const totalHeight = Math.max(4, Math.round((row.total / max) * 156))
+              const solvedHeight = Math.max(row.solucionados > 0 ? 4 : 0, Math.round((row.solucionados / max) * 156))
               return (
                 <div key={row.data} className="group flex w-14 flex-col items-center gap-2">
-                  <div className="flex h-40 w-full items-end justify-center">
-                    <div className="relative w-9 overflow-hidden rounded-t-xl bg-blue-100" style={{ height: `${totalHeight}px` }} title={`${date(row.data)}: ${row.total} atendimento${row.total !== 1 ? 's' : ''}`}>
-                      <div className="absolute inset-x-0 bottom-0 bg-blue-500 transition-all duration-500" style={{ height: `${totalHeight}px` }} />
-                      {solvedHeight > 0 && <div className="absolute inset-x-1 bottom-1 rounded-t-md bg-emerald-400" style={{ height: `${solvedHeight}px` }} />}
-                      {refundHeight > 0 && <div className="absolute inset-x-2 bottom-1 rounded-t-sm bg-amber-400" style={{ height: `${refundHeight}px` }} />}
-                    </div>
+                  <div className="flex h-40 w-full items-end justify-center gap-1">
+                    <div
+                      className="w-3 rounded-t-md bg-blue-500 transition-all duration-500"
+                      style={{ height: `${totalHeight}px` }}
+                      title={`Total ${date(row.data)}: ${row.total} atendimento${row.total !== 1 ? 's' : ''}`}
+                    />
+                    <div
+                      className="w-3 rounded-t-md bg-emerald-500 transition-all duration-500"
+                      style={{ height: `${solvedHeight}px` }}
+                      title={`Solucionados ${date(row.data)}: ${row.solucionados} atendimento${row.solucionados !== 1 ? 's' : ''}`}
+                    />
                   </div>
                   <div className="text-center">
                     <p className="text-xs font-bold text-gray-900">{row.total}</p>
