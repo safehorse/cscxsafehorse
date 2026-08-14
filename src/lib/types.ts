@@ -79,6 +79,7 @@ export interface DashboardData {
   }
   proximos: Atendimento[]
   status: { status: string; total: number }[]
+  por_data: { data: string; total: number; solucionados: number; reembolsados: number }[]
 }
 
 export interface CadastroOptions {

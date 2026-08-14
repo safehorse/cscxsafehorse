@@ -275,6 +275,8 @@ export function DashboardPage() {
             <Metric label="Valor reembolsado" value={money(dashboard?.totais.valor_reembolso)} loading={loading} tone="blue" />
           </div>
 
+          <AtendimentosPorDataChart rows={dashboard?.por_data ?? []} loading={loading} />
+
           <div className="rounded-2xl border border-gray-200 bg-white">
             <div className="border-b border-gray-100 p-4">
               <div className="flex flex-wrap items-center gap-3">
@@ -1143,6 +1145,65 @@ function Metric({ label, value, loading, tone = 'gray' }: { label: string; value
   )
 }
 
+function AtendimentosPorDataChart({ rows, loading }: { rows: DashboardData['por_data']; loading: boolean }) {
+  const max = Math.max(1, ...rows.map(row => row.total))
+  const total = rows.reduce((sum, row) => sum + row.total, 0)
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-950">Atendimentos por data</h2>
+          <p className="text-xs text-gray-400">{loading ? 'Carregando período...' : `${total} atendimento${total !== 1 ? 's' : ''} no filtro atual`}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-gray-500">
+          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-500" /> Total</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Solucionados</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" /> Reembolsados</span>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex h-48 items-end gap-2 overflow-hidden">
+          {Array.from({ length: 14 }, (_, index) => (
+            <div key={index} className="flex min-w-12 flex-1 flex-col items-center gap-2">
+              <div className="w-full animate-pulse rounded-t-xl bg-gray-100" style={{ height: `${44 + (index % 5) * 22}px` }} />
+              <div className="h-3 w-10 animate-pulse rounded bg-gray-100" />
+            </div>
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="grid h-40 place-items-center text-sm text-gray-400">Sem atendimentos neste período.</div>
+      ) : (
+        <div className="overflow-x-auto pb-1">
+          <div className="flex h-56 min-w-max items-end gap-2">
+            {rows.map(row => {
+              const totalHeight = Math.max(12, Math.round((row.total / max) * 156))
+              const solvedHeight = row.total ? Math.max(3, Math.round((row.solucionados / row.total) * totalHeight)) : 0
+              const refundHeight = row.total ? Math.max(0, Math.round((row.reembolsados / row.total) * totalHeight)) : 0
+              return (
+                <div key={row.data} className="group flex w-14 flex-col items-center gap-2">
+                  <div className="flex h-40 w-full items-end justify-center">
+                    <div className="relative w-9 overflow-hidden rounded-t-xl bg-blue-100" style={{ height: `${totalHeight}px` }} title={`${date(row.data)}: ${row.total} atendimento${row.total !== 1 ? 's' : ''}`}>
+                      <div className="absolute inset-x-0 bottom-0 bg-blue-500 transition-all duration-500" style={{ height: `${totalHeight}px` }} />
+                      {solvedHeight > 0 && <div className="absolute inset-x-1 bottom-1 rounded-t-md bg-emerald-400" style={{ height: `${solvedHeight}px` }} />}
+                      {refundHeight > 0 && <div className="absolute inset-x-2 bottom-1 rounded-t-sm bg-amber-400" style={{ height: `${refundHeight}px` }} />}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-gray-900">{row.total}</p>
+                    <p className="text-[11px] text-gray-400">{shortDate(row.data)}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StatusChart({ rows, loading }: { rows: DashboardData['status']; loading: boolean }) {
   const max = Math.max(1, ...rows.map(row => row.total))
 
@@ -1368,6 +1429,11 @@ function PriorityBadge({ value }: { value?: string }) {
 function date(value?: string | null) {
   if (!value) return '-'
   return new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR')
+}
+
+function shortDate(value?: string | null) {
+  if (!value) return '-'
+  return new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
 }
 
 function dateTime(value?: string | null) {

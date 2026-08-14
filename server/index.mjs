@@ -152,7 +152,7 @@ app.get('/api/dashboard', asyncRoute(async (req, res) => {
   const filters = buildAtendimentoFilters(req.query)
   const whereSql = filters.where.length ? `where ${filters.where.join(' and ')}` : ''
 
-  const [totais, proximos, statusRows] = await Promise.all([
+  const [totais, proximos, statusRows, porDataRows] = await Promise.all([
     pool.query(`
       select
         count(*)::int as total,
@@ -180,12 +180,24 @@ app.get('/api/dashboard', asyncRoute(async (req, res) => {
       group by status
       order by total desc, status asc
     `, filters.values),
+    pool.query(`
+      select
+        data_solicitacao::date as data,
+        count(*)::int as total,
+        count(*) filter (where upper(status) in ('FINALIZADO', 'CONCLUIDO'))::int as solucionados,
+        count(*) filter (where reembolso_valor is not null or nullif(trim(coalesce(reembolso_motivo, '')), '') is not null)::int as reembolsados
+      from cscx_atendimentos
+      ${whereSql ? `${whereSql} and data_solicitacao is not null` : 'where data_solicitacao is not null'}
+      group by data_solicitacao::date
+      order by data_solicitacao::date asc
+    `, filters.values),
   ])
 
   res.json({
     totais: totais.rows[0],
     proximos: proximos.rows,
     status: statusRows.rows,
+    por_data: porDataRows.rows,
   })
 }))
 
