@@ -47,39 +47,50 @@ async function apiFetch(path, init) {
 }
 
 const STYLE = `
-#cscx-panel { position: fixed; top: 0; right: 0; height: 100vh; width: 320px; background: #fff;
-  border-left: 1px solid #e5e7eb; box-shadow: -4px 0 16px rgba(0,0,0,.08); z-index: 999999;
-  font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #111827;
-  display: flex; flex-direction: column; transition: transform .2s ease; }
+#cscx-panel {
+  --cscx-bg: #fff; --cscx-bg-soft: #f9fafb; --cscx-bg-hover: #eff6ff; --cscx-text: #111827;
+  --cscx-text-soft: #6b7280; --cscx-text-faint: #9ca3af; --cscx-border: #e5e7eb; --cscx-border-soft: #f5f5f5;
+  --cscx-accent: #2563eb; --cscx-accent-bg: #eff6ff; --cscx-accent-border: #93c5fd; --cscx-shadow: rgba(0,0,0,.08);
+}
+#cscx-panel.cscx-dark {
+  --cscx-bg: #202c33; --cscx-bg-soft: #182229; --cscx-bg-hover: #2a3942; --cscx-text: #e9edef;
+  --cscx-text-soft: #8696a0; --cscx-text-faint: #667781; --cscx-border: #2f3b43; --cscx-border-soft: #2a3439;
+  --cscx-accent: #53bdeb; --cscx-accent-bg: #0b2b3c; --cscx-accent-border: #2a4a5c; --cscx-shadow: rgba(0,0,0,.35);
+}
+#cscx-panel { position: fixed; top: 0; right: 0; height: 100vh; width: 320px; background: var(--cscx-bg);
+  border-left: 1px solid var(--cscx-border); box-shadow: -4px 0 16px var(--cscx-shadow); z-index: 999999;
+  font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: var(--cscx-text);
+  display: flex; flex-direction: column; transition: transform .2s ease, background-color .15s ease; }
 #cscx-panel.cscx-collapsed { transform: translateX(300px); }
 #cscx-panel * { box-sizing: border-box; }
 #cscx-toggle { position: fixed; top: 12px; right: 328px; z-index: 1000000; width: 34px; height: 34px;
   border-radius: 10px; background: #059669; color: #fff; border: none; cursor: pointer; font-size: 16px;
   box-shadow: 0 2px 8px rgba(0,0,0,.15); transition: right .2s ease; }
 #cscx-panel.cscx-collapsed ~ #cscx-toggle { right: 8px; }
-.cscx-header { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; font-weight: 700; font-size: 13px;
+.cscx-header { padding: 12px 14px; border-bottom: 1px solid var(--cscx-border-soft); font-weight: 700; font-size: 13px;
   display: flex; align-items: center; gap: 8px; }
 .cscx-body { flex: 1; overflow-y: auto; }
-.cscx-section { padding: 12px 14px; border-bottom: 1px solid #f5f5f5; }
-.cscx-section h3 { margin: 0 0 8px; font-size: 12px; font-weight: 700; color: #374151;
+.cscx-section { padding: 12px 14px; border-bottom: 1px solid var(--cscx-border-soft); }
+.cscx-section h3 { margin: 0 0 8px; font-size: 12px; font-weight: 700; color: var(--cscx-text-soft);
   display: flex; align-items: center; gap: 6px; }
-.cscx-badge { background: #f3f4f6; color: #6b7280; border-radius: 999px; padding: 1px 7px; font-size: 11px; font-weight: 700; }
-.cscx-empty { color: #9ca3af; font-size: 12px; background: #f9fafb; border-radius: 10px; padding: 14px; text-align: center; }
-.cscx-input { width: 100%; padding: 7px 9px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 12px; margin-bottom: 6px; }
-.cscx-btn { width: 100%; padding: 7px; border: none; border-radius: 8px; background: #2563eb; color: #fff;
+.cscx-badge { background: var(--cscx-bg-soft); color: var(--cscx-text-soft); border-radius: 999px; padding: 1px 7px; font-size: 11px; font-weight: 700; }
+.cscx-empty { color: var(--cscx-text-faint); font-size: 12px; background: var(--cscx-bg-soft); border-radius: 10px; padding: 14px; text-align: center; }
+.cscx-input { width: 100%; padding: 7px 9px; border: 1px solid var(--cscx-border); border-radius: 8px; font-size: 12px;
+  margin-bottom: 6px; background: var(--cscx-bg); color: var(--cscx-text); }
+.cscx-btn { width: 100%; padding: 7px; border: none; border-radius: 8px; background: var(--cscx-accent); color: #fff;
   font-weight: 700; font-size: 12px; cursor: pointer; }
 .cscx-btn:disabled { opacity: .5; cursor: default; }
-.cscx-sugg { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-bottom: 6px; }
-.cscx-sugg-item { padding: 6px 9px; cursor: pointer; border-bottom: 1px solid #f5f5f5; }
+.cscx-sugg { border: 1px solid var(--cscx-border); border-radius: 8px; overflow: hidden; margin-bottom: 6px; }
+.cscx-sugg-item { padding: 6px 9px; cursor: pointer; border-bottom: 1px solid var(--cscx-border-soft); }
 .cscx-sugg-item:last-child { border-bottom: none; }
-.cscx-sugg-item:hover { background: #eff6ff; }
-.cscx-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 9px; margin-bottom: 6px; text-decoration: none;
+.cscx-sugg-item:hover { background: var(--cscx-bg-hover); }
+.cscx-card { border: 1px solid var(--cscx-border); border-radius: 10px; padding: 9px; margin-bottom: 6px; text-decoration: none;
   color: inherit; display: block; }
-.cscx-card:hover { border-color: #93c5fd; background: #eff6ff; }
+.cscx-card:hover { border-color: var(--cscx-accent-border); background: var(--cscx-bg-hover); }
 .cscx-card-top { display: flex; justify-content: space-between; gap: 6px; align-items: start; }
 .cscx-card-title { font-weight: 700; font-size: 12px; }
-.cscx-tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; white-space: nowrap; }
-.cscx-card-sub { color: #6b7280; font-size: 11px; margin-top: 3px; }
+.cscx-tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--cscx-accent-bg); color: var(--cscx-accent); white-space: nowrap; }
+.cscx-card-sub { color: var(--cscx-text-soft); font-size: 11px; margin-top: 3px; }
 `
 
 let panelEl = null
@@ -103,7 +114,28 @@ function ensurePanel() {
   toggleEl.addEventListener('click', () => panelEl.classList.toggle('cscx-collapsed'))
   document.body.appendChild(toggleEl)
 
+  syncTheme()
+  setInterval(syncTheme, 3000)
+
   render()
+}
+
+// O WhatsApp Web deixa trocar entre claro/escuro sem recarregar a página,
+// e não há um jeito documentado/estável de ler isso, então detectamos pela
+// cor de fundo real que o WhatsApp está pintando por trás do painel.
+function syncTheme() {
+  try {
+    const probe = document.querySelector('#app') || document.body
+    const bg = getComputedStyle(probe).backgroundColor
+    const channels = bg.match(/[\d.]+/g)
+    if (!channels || channels.length < 3) return
+    const [r, g, b] = channels.map(Number)
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    const dark = luminance < 0.5
+    panelEl.classList.toggle('cscx-dark', dark)
+  } catch {
+    // Se não der pra ler, fica no tema claro (padrão).
+  }
 }
 
 async function onActiveChat(chat) {
