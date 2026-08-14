@@ -39,7 +39,12 @@ function asyncRoute(handler) {
 
 function normalizaStatus(status) {
   const value = String(status || 'ABERTO').trim().toUpperCase()
-  return value || 'ABERTO'
+  if (!value) return 'ABERTO'
+  if (['AGUARDANDO DEVOLU??O', 'AGUARDANDO DEVOLUCAO', 'AGUARDANDO DEVOLUÇÃO'].includes(value)) return 'AGUARDANDO DEVOLUÇÃO'
+  if (['EM PRODU??O', 'EM PRODUCAO', 'EM PRODUÇÃO'].includes(value)) return 'EM PRODUÇÃO'
+  if (['EM ANALISE', 'EM ANÁLISE'].includes(value)) return 'EM ANÁLISE'
+  if (['CREDITO GERADO', 'CRÉDITO GERADO'].includes(value)) return 'CRÉDITO GERADO'
+  return value
 }
 
 function toNumberOrNull(value) {

@@ -29,7 +29,7 @@ import { DateTimePicker } from '../components/DateTimePicker'
 import { api } from '../lib/api'
 import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, PcpPedidoItem } from '../lib/types'
 
-const STATUS_OPTIONS = ['ABERTO', 'AGUARDANDO DEVOLUCAO', 'FINALIZADO', 'EM ANALISE', 'CREDITO GERADO', 'TROCA GERADA']
+const STATUS_OPTIONS = ['ABERTO', 'AGUARDANDO DEVOLUÇÃO', 'FINALIZADO', 'EM ANÁLISE', 'EM PRODUÇÃO', 'CRÉDITO GERADO', 'TROCA GERADA']
 const PRIORIDADES = ['baixa', 'normal', 'alta', 'urgente'] as const
 const PAGE_SIZE = 20
 
