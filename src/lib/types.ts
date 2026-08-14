@@ -105,6 +105,19 @@ export interface Cliente {
   nome: string | null
   telefone: string | null
   chamados: number
+  endereco: string | null
+  numero: string | null
+  bairro: string | null
+  cidade: string | null
+  uf: string | null
+  cep: string | null
+  telefone1: string | null
+  telefone2: string | null
+  telefone3: string | null
+  email1: string | null
+  email2: string | null
+  contato: string | null
+  cpf_cnpj: string | null
 }
 
 export interface PcpPedidoResumo {

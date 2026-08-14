@@ -24,6 +24,7 @@ import { UserNameButton } from '../components/UserNameButton'
 import { api } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
 import type { Atendimento, Cliente, PcpPedido } from '../lib/types'
+import { PedidoResumo } from './DashboardPage'
 
 const PAGE_SIZE = 30
 
@@ -252,17 +253,46 @@ export function ClientesPage() {
             onMouseDown={event => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-5">
-              <div>
+              <div className="min-w-0">
                 <h2 className="text-lg font-bold text-gray-950">{selectedCliente.nome ?? 'Cliente sem nome'}</h2>
-                <p className="text-xs text-gray-400">Código {selectedCliente.codigo_cliente}</p>
-                {selectedCliente.telefone && (
-                  <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-700">
-                    <Phone size={11} />
-                    {formatPhone(selectedCliente.telefone)}
+                <p className="text-xs text-gray-400">
+                  Código {selectedCliente.codigo_cliente}
+                  {selectedCliente.cpf_cnpj ? ` · CPF/CNPJ ${selectedCliente.cpf_cnpj}` : ''}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-gray-600">
+                  {[selectedCliente.telefone1, selectedCliente.telefone2, selectedCliente.telefone3]
+                    .filter((value, index, arr) => value && arr.indexOf(value) === index)
+                    .map(value => (
+                      <span key={value} className="flex items-center gap-1 text-emerald-700">
+                        <Phone size={11} />
+                        {value}
+                      </span>
+                    ))}
+                  {!selectedCliente.telefone1 && !selectedCliente.telefone2 && !selectedCliente.telefone3 && selectedCliente.telefone && (
+                    <span className="flex items-center gap-1 text-emerald-700">
+                      <Phone size={11} />
+                      {formatPhone(selectedCliente.telefone)}
+                    </span>
+                  )}
+                  {(selectedCliente.email1 || selectedCliente.email2) && (
+                    <span>{[selectedCliente.email1, selectedCliente.email2].filter(Boolean).join(' · ')}</span>
+                  )}
+                  {selectedCliente.contato && <span>Contato: {selectedCliente.contato}</span>}
+                </div>
+                {(selectedCliente.endereco || selectedCliente.cidade) && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {[
+                      [selectedCliente.endereco, selectedCliente.numero].filter(Boolean).join(', '),
+                      selectedCliente.bairro,
+                      [selectedCliente.cidade, selectedCliente.uf].filter(Boolean).join('/'),
+                      selectedCliente.cep,
+                    ]
+                      .filter(Boolean)
+                      .join(' — ')}
                   </p>
                 )}
               </div>
-              <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={() => setSelectedCliente(null)}>
+              <button className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={() => setSelectedCliente(null)}>
                 <X size={18} />
               </button>
             </div>
@@ -315,15 +345,7 @@ export function ClientesPage() {
                   ) : (
                     <div className="space-y-2">
                       {detailPedidos.map(pedido => (
-                        <div key={pedido.id} className="rounded-xl border border-gray-200 p-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="min-w-0 truncate text-sm font-bold">#{pedido.codigo_venda}</p>
-                            {pedido.situacao_erp && (
-                              <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">{pedido.situacao_erp}</span>
-                            )}
-                          </div>
-                          <p className="mt-2 text-[11px] font-medium text-gray-400">{date(pedido.data_pedido)}</p>
-                        </div>
+                        <PedidoResumo key={pedido.id} pedido={pedido} compact />
                       ))}
                     </div>
                   )}

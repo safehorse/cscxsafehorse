@@ -34,7 +34,7 @@ import { api, type AtendimentoFilters } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
 import type { Atendimento, CadastroOptions, ClienteSugestao, DashboardData, PcpPedido, PcpPedidoItem, PcpPedidoResumo, ProdutoSugestao } from '../lib/types'
 
-const STATUS_OPTIONS = ['ABERTO', 'AGUARDANDO DEVOLUÇÃO', 'FINALIZADO', 'EM ANÁLISE', 'EM PRODUÇÃO', 'CRÉDITO GERADO', 'TROCA GERADA']
+const STATUS_OPTIONS = ['ABERTO', 'PENDENTE', 'AGUARDANDO DEVOLUÇÃO', 'FINALIZADO', 'EM ANÁLISE', 'EM PRODUÇÃO', 'CRÉDITO GERADO', 'TROCA GERADA']
 const PRIORIDADES = ['baixa', 'normal', 'alta', 'urgente'] as const
 const PAGE_SIZE = 10
 
@@ -1606,7 +1606,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   )
 }
 
-function PedidoResumo({ pedido, compact = false }: { pedido: PcpPedido; compact?: boolean }) {
+export function PedidoResumo({ pedido, compact = false }: { pedido: PcpPedido; compact?: boolean }) {
   return (
     <div className={`${compact ? 'border-blue-100 bg-white' : 'border-gray-200 bg-gray-50'} rounded-2xl border p-4`}>
       <div className="flex flex-wrap items-center gap-2">
@@ -1619,7 +1619,19 @@ function PedidoResumo({ pedido, compact = false }: { pedido: PcpPedido; compact?
         <Info label="Cliente" value={pedido.nome_cliente} />
         <Info label="Vendedor" value={pedido.vendedor} />
         <Info label="Total pedido" value={money(pedido.valor_total)} />
+        <Info label="Data do pedido" value={date(pedido.data_pedido)} />
+        <Info label="Previsão de entrega" value={date(pedido.data_entrega)} />
       </div>
+      {pedido.itens.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {pedido.itens.map(item => (
+            <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-1.5 text-xs">
+              <span className="min-w-0 truncate text-gray-700">{item.descricao_produto || item.codigo_produto || 'Produto'}{item.quantidade ? ` × ${item.quantidade}` : ''}</span>
+              <span className="shrink-0 font-semibold text-gray-500">{money(item.valor_total)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

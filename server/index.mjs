@@ -851,13 +851,15 @@ app.get('/api/pcp/clientes/:codigoCliente/pedidos', asyncRoute(async (req, res) 
   if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
   const codigo = encodeURIComponent(String(req.params.codigoCliente || '').trim())
   if (!codigo) return res.json({ data: [] })
-  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,last_webhook_payload')
+  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
   const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?codigo_cliente=eq.${codigo}&select=${select}&order=data_pedido.desc&limit=20`, {
     headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
   })
   const data = await response.json().catch(() => [])
   if (!response.ok) return res.status(response.status).json({ error: data?.message || 'Falha ao consultar pedidos do cliente.' })
-  res.json({ data: (Array.isArray(data) ? data : []).map(normalizePcpPedido) })
+  const pedidos = (Array.isArray(data) ? data : []).map(normalizePcpPedido)
+  await Promise.all(pedidos.map(hydrateItemValuesFromHistory))
+  res.json({ data: pedidos })
 }))
 
 function sanitizePostgrestTerm(value) {
@@ -930,6 +932,8 @@ app.get('/api/clientes', asyncRoute(async (req, res) => {
   const [list, total] = await Promise.all([
     pool.query(`
       select c.codigo_cliente, c.nome, c.telefone,
+        c.endereco, c.numero, c.bairro, c.cidade, c.uf, c.cep,
+        c.telefone1, c.telefone2, c.telefone3, c.email1, c.email2, c.contato, c.cpf_cnpj,
         (select count(*)::int from cscx_atendimentos a where a.codigo_cliente = c.codigo_cliente) as chamados
       from cscx_clientes c
       ${whereSql}
