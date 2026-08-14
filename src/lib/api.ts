@@ -99,6 +99,9 @@ export const api = {
   createResponsavel: (getToken: () => Promise<string | null>, nome: string) =>
     request('/api/cadastros/responsaveis', getToken, { method: 'POST', body: JSON.stringify({ nome }) }),
 
+  createProximaAcao: (getToken: () => Promise<string | null>, nome: string) =>
+    request('/api/cadastros/proximas-acoes', getToken, { method: 'POST', body: JSON.stringify({ nome }) }),
+
   pcpPedido: (getToken: () => Promise<string | null>, codigo: string) =>
     request<{ data: PcpPedido | null }>(`/api/pcp/pedidos/${encodeURIComponent(codigo)}`, getToken),
 

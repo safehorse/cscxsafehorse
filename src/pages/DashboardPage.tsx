@@ -3,12 +3,14 @@ import { useAuth, useClerk, useUser } from '@clerk/clerk-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
+  ArrowRightCircle,
   Building2,
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Flag,
   Grid3X3,
   LoaderCircle,
   List,
@@ -20,7 +22,6 @@ import {
   RefreshCw,
   Save,
   Search,
-  User,
   UserPlus,
   UsersRound,
   X,
@@ -72,7 +73,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
   const isChamadosPage = mode === 'chamados'
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([])
-  const [cadastros, setCadastros] = useState<CadastroOptions>({ setores: [], responsaveis: [] })
+  const [cadastros, setCadastros] = useState<CadastroOptions>({ setores: [], responsaveis: [], proximasAcoes: [] })
   const [selected, setSelected] = useState<Atendimento | null>(null)
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -674,13 +675,14 @@ function DetailDrawer({ selected, loading, note, setNote, getToken, cadastros, o
     setEditForm(prev => ({ ...prev, [key]: value }))
   }
 
-  async function createCadastro(kind: 'setor' | 'responsavel') {
-    const value = (kind === 'setor' ? editForm.setor : editForm.responsavel).trim()
+  async function createCadastro(kind: 'setor' | 'responsavel' | 'proxima_acao') {
+    const value = (kind === 'setor' ? editForm.setor : kind === 'responsavel' ? editForm.responsavel : editForm.proxima_acao).trim()
     if (!value) return
     try {
       if (kind === 'setor') await api.createSetor(getToken, value)
-      else await api.createResponsavel(getToken, value)
-      toast.success(kind === 'setor' ? 'Setor cadastrado.' : 'Responsável cadastrado.')
+      else if (kind === 'responsavel') await api.createResponsavel(getToken, value)
+      else await api.createProximaAcao(getToken, value)
+      toast.success('Cadastrado com sucesso.')
       onCadastroChanged()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao cadastrar.')
@@ -764,24 +766,45 @@ function DetailDrawer({ selected, loading, note, setNote, getToken, cadastros, o
                   <Field label="Vendedor" value={editForm.vendedor} onChange={value => updateEdit('vendedor', value)} />
                   <Field label="Motivo" value={editForm.motivo} onChange={value => updateEdit('motivo', value)} />
                   <SelectField label="Status" value={editForm.status} options={STATUS_OPTIONS} onChange={value => updateEdit('status', value)} />
-                  <CadastroField
+                  <Listbox
                     label="Setor"
                     value={editForm.setor}
                     options={cadastros.setores}
-                    listId="edit-setores-list"
                     icon={<Building2 size={15} />}
+                    emptyLabel="Nenhum setor encontrado."
+                    createTitle="Cadastrar setor"
                     onChange={value => updateEdit('setor', value)}
                     onCreate={() => createCadastro('setor')}
                   />
-                  <ResponsavelListbox
+                  <Listbox
+                    label="Responsável"
                     value={editForm.responsavel}
                     options={cadastros.responsaveis}
+                    icon={<UserPlus size={15} />}
+                    emptyLabel="Nenhum responsável encontrado."
+                    createTitle="Cadastrar responsável"
                     onChange={value => updateEdit('responsavel', value)}
                     onCreate={() => createCadastro('responsavel')}
                   />
-                  <Field label="Próxima ação" value={editForm.proxima_acao} onChange={value => updateEdit('proxima_acao', value)} />
+                  <Listbox
+                    label="Próxima ação"
+                    value={editForm.proxima_acao}
+                    options={cadastros.proximasAcoes}
+                    icon={<ArrowRightCircle size={15} />}
+                    emptyLabel="Nenhuma próxima ação encontrada."
+                    createTitle="Cadastrar próxima ação"
+                    onChange={value => updateEdit('proxima_acao', value)}
+                    onCreate={() => createCadastro('proxima_acao')}
+                  />
                   <DateTimePicker label="Agendado para" value={editForm.agendado_para} onChange={value => updateEdit('agendado_para', value)} />
-                  <SelectField label="Prioridade" value={editForm.prioridade} options={[...PRIORIDADES]} onChange={value => updateEdit('prioridade', value)} />
+                  <Listbox
+                    label="Prioridade"
+                    value={editForm.prioridade}
+                    options={[...PRIORIDADES]}
+                    icon={<Flag size={15} />}
+                    emptyLabel="Nenhuma prioridade encontrada."
+                    onChange={value => updateEdit('prioridade', value)}
+                  />
                   <Field label="Novo pedido" value={editForm.novo_pedido} onChange={value => updateEdit('novo_pedido', value)} />
                   <label className="sm:col-span-2">
                     <span className="mb-1 block text-xs font-medium text-gray-500">Descrição da situação</span>
@@ -1059,13 +1082,14 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
     }
   }
 
-  async function createCadastro(kind: 'setor' | 'responsavel') {
-    const value = (kind === 'setor' ? form.setor : form.responsavel).trim()
+  async function createCadastro(kind: 'setor' | 'responsavel' | 'proxima_acao') {
+    const value = (kind === 'setor' ? form.setor : kind === 'responsavel' ? form.responsavel : form.proxima_acao).trim()
     if (!value) return
     try {
       if (kind === 'setor') await api.createSetor(getToken, value)
-      else await api.createResponsavel(getToken, value)
-      toast.success(kind === 'setor' ? 'Setor cadastrado.' : 'Responsável cadastrado.')
+      else if (kind === 'responsavel') await api.createResponsavel(getToken, value)
+      else await api.createProximaAcao(getToken, value)
+      toast.success('Cadastrado com sucesso.')
       onCadastroChanged()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao cadastrar.')
@@ -1229,24 +1253,45 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Motivo" value={form.motivo} onChange={value => update('motivo', value)} />
                 <SelectField label="Status" value={form.status} options={STATUS_OPTIONS} onChange={value => update('status', value)} />
-                <CadastroField
+                <Listbox
                   label="Setor"
                   icon={<Building2 size={15} />}
                   value={form.setor}
                   options={cadastros.setores}
-                  listId="setores-list"
+                  emptyLabel="Nenhum setor encontrado."
+                  createTitle="Cadastrar setor"
                   onChange={value => update('setor', value)}
                   onCreate={() => createCadastro('setor')}
                 />
-                <ResponsavelListbox
+                <Listbox
+                  label="Responsável"
+                  icon={<UserPlus size={15} />}
                   value={form.responsavel}
                   options={cadastros.responsaveis}
+                  emptyLabel="Nenhum responsável encontrado."
+                  createTitle="Cadastrar responsável"
                   onChange={value => update('responsavel', value)}
                   onCreate={() => createCadastro('responsavel')}
                 />
-                <Field label="Próxima ação" value={form.proxima_acao} onChange={value => update('proxima_acao', value)} />
+                <Listbox
+                  label="Próxima ação"
+                  icon={<ArrowRightCircle size={15} />}
+                  value={form.proxima_acao}
+                  options={cadastros.proximasAcoes}
+                  emptyLabel="Nenhuma próxima ação encontrada."
+                  createTitle="Cadastrar próxima ação"
+                  onChange={value => update('proxima_acao', value)}
+                  onCreate={() => createCadastro('proxima_acao')}
+                />
                 <DateTimePicker label="Agendado para" value={form.agendado_para} onChange={value => update('agendado_para', value)} />
-                <SelectField label="Prioridade" value={form.prioridade} options={[...PRIORIDADES]} onChange={value => update('prioridade', value)} />
+                <Listbox
+                  label="Prioridade"
+                  icon={<Flag size={15} />}
+                  value={form.prioridade}
+                  options={[...PRIORIDADES]}
+                  emptyLabel="Nenhuma prioridade encontrada."
+                  onChange={value => update('prioridade', value)}
+                />
                 <Field label="Novo pedido" value={form.novo_pedido} onChange={value => update('novo_pedido', value)} />
                 <label className="sm:col-span-2">
                   <span className="mb-1 block text-xs font-medium text-gray-500">Descrição da situação</span>
@@ -1464,48 +1509,15 @@ function SelectField({ label, value, options, onChange }: { label: string; value
   )
 }
 
-function CadastroField({ label, value, options, listId, icon, onChange, onCreate }: {
+function Listbox({ label, value, options, icon, emptyLabel, createTitle, onChange, onCreate }: {
   label: string
   value: string
   options: string[]
-  listId: string
   icon: React.ReactNode
+  emptyLabel: string
+  createTitle?: string
   onChange: (value: string) => void
-  onCreate: () => void
-}) {
-  const exists = options.some(option => option.toLowerCase() === value.trim().toLowerCase())
-  return (
-    <label>
-      <span className="mb-1 block text-xs font-medium text-gray-500">{label}</span>
-      <div className="flex gap-2">
-        <input
-          list={listId}
-          value={value}
-          onChange={event => onChange(event.target.value)}
-          className="h-10 min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-        />
-        <datalist id={listId}>
-          {options.map(option => <option key={option} value={option} />)}
-        </datalist>
-        <button
-          type="button"
-          onClick={onCreate}
-          disabled={!value.trim() || exists}
-          className="grid h-10 w-10 place-items-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
-          title={`Cadastrar ${label.toLowerCase()}`}
-        >
-          {icon}
-        </button>
-      </div>
-    </label>
-  )
-}
-
-function ResponsavelListbox({ value, options, onChange, onCreate }: {
-  value: string
-  options: string[]
-  onChange: (value: string) => void
-  onCreate: () => void
+  onCreate?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState(value)
@@ -1528,10 +1540,10 @@ function ResponsavelListbox({ value, options, onChange, onCreate }: {
 
   return (
     <div className="relative">
-      <span className="mb-1 block text-xs font-medium text-gray-500">Responsável</span>
+      <span className="mb-1 block text-xs font-medium text-gray-500">{label}</span>
       <div className="flex gap-2">
         <div className="relative min-w-0 flex-1">
-          <UserPlus size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{icon}</span>
           <input
             value={open ? query : value}
             onFocus={openList}
@@ -1552,7 +1564,7 @@ function ResponsavelListbox({ value, options, onChange, onCreate }: {
           {open && (
             <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
               {filtered.length === 0 ? (
-                <div className="px-3 py-3 text-sm text-gray-400">Nenhum responsável encontrado.</div>
+                <div className="px-3 py-3 text-sm text-gray-400">{emptyLabel}</div>
               ) : (
                 <div className="max-h-56 overflow-y-auto p-1" role="listbox">
                   {filtered.map(option => {
@@ -1568,7 +1580,7 @@ function ResponsavelListbox({ value, options, onChange, onCreate }: {
                         aria-selected={selected}
                       >
                         <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg ${selected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                          {selected ? <CheckCircle2 size={13} /> : <User size={13} />}
+                          {selected ? <CheckCircle2 size={13} /> : icon}
                         </span>
                         <span className="min-w-0 flex-1 truncate font-medium">{option}</span>
                       </button>
@@ -1580,15 +1592,17 @@ function ResponsavelListbox({ value, options, onChange, onCreate }: {
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={onCreate}
-          disabled={!value.trim() || exists}
-          className="grid h-10 w-10 place-items-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 disabled:opacity-40"
-          title="Cadastrar responsável"
-        >
-          <UserPlus size={15} />
-        </button>
+        {onCreate && (
+          <button
+            type="button"
+            onClick={onCreate}
+            disabled={!value.trim() || exists}
+            className="grid h-10 w-10 place-items-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 disabled:opacity-40"
+            title={createTitle}
+          >
+            {icon}
+          </button>
+        )}
       </div>
     </div>
   )

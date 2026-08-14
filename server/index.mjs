@@ -216,7 +216,7 @@ app.get('/api/dashboard', asyncRoute(async (req, res) => {
 }))
 
 app.get('/api/cadastros', asyncRoute(async (_req, res) => {
-  const [setores, responsaveis] = await Promise.all([
+  const [setores, responsaveis, proximasAcoes] = await Promise.all([
     pool.query(`
       select nome from cscx_setores where ativo = true
       union
@@ -229,10 +229,17 @@ app.get('/api/cadastros', asyncRoute(async (_req, res) => {
       select distinct trim(responsavel) from cscx_atendimentos where nullif(trim(coalesce(responsavel, '')), '') is not null
       order by nome
     `),
+    pool.query(`
+      select nome from cscx_proximas_acoes where ativo = true
+      union
+      select distinct trim(proxima_acao) from cscx_atendimentos where nullif(trim(coalesce(proxima_acao, '')), '') is not null
+      order by nome
+    `),
   ])
   res.json({
     setores: setores.rows.map(row => row.nome),
     responsaveis: responsaveis.rows.map(row => row.nome),
+    proximasAcoes: proximasAcoes.rows.map(row => row.nome),
   })
 }))
 
@@ -445,6 +452,18 @@ app.post('/api/cadastros/responsaveis', asyncRoute(async (req, res) => {
   if (!nome) return res.status(400).json({ error: 'Informe o responsável.' })
   const { rows } = await pool.query(`
     insert into cscx_responsaveis (nome)
+    values ($1)
+    on conflict (nome) do update set ativo = true
+    returning *
+  `, [nome])
+  res.status(201).json({ data: rows[0] })
+}))
+
+app.post('/api/cadastros/proximas-acoes', asyncRoute(async (req, res) => {
+  const nome = stringOrNull(req.body.nome)
+  if (!nome) return res.status(400).json({ error: 'Informe a próxima ação.' })
+  const { rows } = await pool.query(`
+    insert into cscx_proximas_acoes (nome)
     values ($1)
     on conflict (nome) do update set ativo = true
     returning *

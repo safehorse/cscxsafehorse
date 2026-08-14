@@ -85,6 +85,7 @@ export interface DashboardData {
 export interface CadastroOptions {
   setores: string[]
   responsaveis: string[]
+  proximasAcoes: string[]
 }
 
 export interface PcpPedidoItem {
