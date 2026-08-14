@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import logoSrc from '../assets/logo.png'
+import { DateTimePicker } from '../components/DateTimePicker'
 import { api } from '../lib/api'
 import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, PcpPedidoItem } from '../lib/types'
 
@@ -792,7 +793,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
                   onCreate={() => createCadastro('responsavel')}
                 />
                 <Field label="Proxima acao" value={form.proxima_acao} onChange={value => update('proxima_acao', value)} />
-                <Field label="Agendado para" type="datetime-local" value={form.agendado_para} onChange={value => update('agendado_para', value)} />
+                <DateTimePicker label="Agendado para" value={form.agendado_para} onChange={value => update('agendado_para', value)} />
                 <SelectField label="Prioridade" value={form.prioridade} options={[...PRIORIDADES]} onChange={value => update('prioridade', value)} />
                 <Field label="Novo pedido" value={form.novo_pedido} onChange={value => update('novo_pedido', value)} />
                 <label className="sm:col-span-2">
