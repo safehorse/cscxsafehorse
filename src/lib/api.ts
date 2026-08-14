@@ -13,7 +13,13 @@ import type {
 
 const API_URL = (import.meta.env.VITE_CSCX_API_URL as string || '').replace(/\/$/, '')
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  details?: unknown
+  constructor(message: string, details?: unknown) {
+    super(message)
+    this.details = details
+  }
+}
 
 export interface AtendimentoFilters {
   search?: string
@@ -37,7 +43,7 @@ async function request<T>(path: string, getToken: () => Promise<string | null>, 
     },
   })
   const data = await response.json().catch(() => null)
-  if (!response.ok) throw new ApiError(data?.error || `Erro HTTP ${response.status}`)
+  if (!response.ok) throw new ApiError(data?.error || `Erro HTTP ${response.status}`, data)
   return sanitizeResponse(data) as T
 }
 
@@ -91,8 +97,14 @@ export const api = {
   updateAtendimento: (getToken: () => Promise<string | null>, id: string, body: Partial<Atendimento>) =>
     request<{ data: Atendimento }>(`/api/atendimentos/${id}`, getToken, { method: 'PATCH', body: JSON.stringify(body) }),
 
-  addInteracao: (getToken: () => Promise<string | null>, id: string, body: { tipo: string; descricao: string }) =>
+  addInteracao: (getToken: () => Promise<string | null>, id: string, body: { tipo: string; descricao: string; produto_id?: string | null; produto_descricao?: string | null }) =>
     request(`/api/atendimentos/${id}/interacoes`, getToken, { method: 'POST', body: JSON.stringify(body) }),
+
+  atendimentoPorPedido: (getToken: () => Promise<string | null>, numero: string) =>
+    request<{ data: { id: string; numero_pedido: string; cliente: string | null; status: string } | null }>(`/api/atendimentos/pedido/${encodeURIComponent(numero)}`, getToken),
+
+  reabrirAtendimento: (getToken: () => Promise<string | null>, id: string, body: { motivo: string; produto_id: string; produto_descricao?: string | null }) =>
+    request<{ data: Atendimento }>(`/api/atendimentos/${id}/reabrir`, getToken, { method: 'POST', body: JSON.stringify(body) }),
 
   cadastros: (getToken: () => Promise<string | null>) =>
     request<CadastroOptions>('/api/cadastros', getToken),

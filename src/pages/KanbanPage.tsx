@@ -161,15 +161,29 @@ export function KanbanPage() {
     }
   }
 
-  async function addNote() {
+  async function addNote(produtoId?: string | null, produtoDescricao?: string | null) {
     if (!selected || !note.trim()) return
     try {
-      await api.addInteracao(getToken, selected.id, { tipo: 'nota', descricao: note.trim() })
+      await api.addInteracao(getToken, selected.id, { tipo: 'nota', descricao: note.trim(), produto_id: produtoId, produto_descricao: produtoDescricao })
       setNote('')
       await openDetail(selected.id)
       toast.success('Histórico atualizado.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao salvar nota.')
+    }
+  }
+
+  async function reabrirChamado(motivo: string, produtoId: string, produtoDescricao: string | null) {
+    if (!selected) return
+    try {
+      const { data } = await api.reabrirAtendimento(getToken, selected.id, { motivo, produto_id: produtoId, produto_descricao: produtoDescricao })
+      setSelected(prev => prev ? { ...prev, ...data } : data)
+      setItems(prev => prev.map(item => item.id === data.id ? { ...item, ...data } : item))
+      await openDetail(selected.id)
+      toast.success('Chamado reaberto.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao reabrir chamado.')
+      throw error
     }
   }
 
@@ -490,6 +504,7 @@ export function KanbanPage() {
           onSaveReembolso={saveReembolso}
           onAddNote={addNote}
           onLoadPedido={loadPedidoFromPcp}
+          onReabrir={reabrirChamado}
         />
       )}
     </div>

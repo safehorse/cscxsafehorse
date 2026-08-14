@@ -24,6 +24,7 @@ export interface Atendimento {
   reembolso_valor: number | null
   reembolso_motivo: string | null
   reembolso_em: string | null
+  reaberto_em: string | null
   pcp_pedido_id?: string | null
   pcp_item_id?: string | null
   pcp_payload?: unknown
@@ -37,9 +38,11 @@ export interface Atendimento {
 export interface Interacao {
   id: string
   atendimento_id: string
-  tipo: 'nota' | 'ligacao' | 'whatsapp' | 'email' | 'reuniao'
+  tipo: 'nota' | 'ligacao' | 'whatsapp' | 'email' | 'reuniao' | 'reabertura'
   descricao: string
   realizado_em: string
+  produto_id: string | null
+  produto_descricao: string | null
 }
 
 export interface Agendamento {

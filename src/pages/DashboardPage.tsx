@@ -232,15 +232,30 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
     }
   }
 
-  async function addNote() {
+  async function addNote(produtoId?: string | null, produtoDescricao?: string | null) {
     if (!selected || !note.trim()) return
     try {
-      await api.addInteracao(getToken, selected.id, { tipo: 'nota', descricao: note.trim() })
+      await api.addInteracao(getToken, selected.id, { tipo: 'nota', descricao: note.trim(), produto_id: produtoId, produto_descricao: produtoDescricao })
       setNote('')
       await openDetail(selected.id)
       toast.success('Histórico atualizado.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao salvar nota.')
+    }
+  }
+
+  async function reabrirChamado(motivo: string, produtoId: string, produtoDescricao: string | null) {
+    if (!selected) return
+    try {
+      const { data } = await api.reabrirAtendimento(getToken, selected.id, { motivo, produto_id: produtoId, produto_descricao: produtoDescricao })
+      setSelected(prev => prev ? { ...prev, ...data } : data)
+      setAtendimentos(prev => prev.map(item => item.id === data.id ? { ...item, ...data } : item))
+      await openDetail(selected.id)
+      toast.success('Chamado reaberto.')
+      load()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao reabrir chamado.')
+      throw error
     }
   }
 
@@ -577,6 +592,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
           onSaveReembolso={saveReembolso}
           onAddNote={addNote}
           onLoadPedido={loadPedidoFromPcp}
+          onReabrir={reabrirChamado}
         />
       )}
 
@@ -600,7 +616,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
   )
 }
 
-export function DetailDrawer({ selected, loading, note, setNote, getToken, cadastros, onCadastroChanged, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido }: {
+export function DetailDrawer({ selected, loading, note, setNote, getToken, cadastros, onCadastroChanged, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido, onReabrir }: {
   selected: Atendimento
   loading: boolean
   note: string
@@ -612,8 +628,9 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   onSaveStatus: (status: string) => Promise<void>
   onSaveAtendimento: (id: string, form: WizardForm) => Promise<void>
   onSaveReembolso: (valor: number | null, motivo: string) => Promise<void>
-  onAddNote: () => void
+  onAddNote: (produtoId?: string | null, produtoDescricao?: string | null) => void
   onLoadPedido: () => Promise<PcpPedido | null>
+  onReabrir: (motivo: string, produtoId: string, produtoDescricao: string | null) => Promise<void>
 }) {
   const [closing, setClosing] = useState(false)
   const [draftStatus, setDraftStatus] = useState(selected.status)
@@ -628,6 +645,11 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState<WizardForm>(() => atendimentoToForm(selected))
   const [savingEdit, setSavingEdit] = useState(false)
+  const [showReabrir, setShowReabrir] = useState(false)
+  const [reabrirMotivo, setReabrirMotivo] = useState('')
+  const [reabrirProdutoId, setReabrirProdutoId] = useState('')
+  const [savingReabrir, setSavingReabrir] = useState(false)
+  const [noteProdutoId, setNoteProdutoId] = useState('')
   const statusChanged = draftStatus !== selected.status
 
   useEffect(() => {
@@ -640,6 +662,10 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
     setPedido(null)
     setEditing(false)
     setEditForm(atendimentoToForm(selected))
+    setShowReabrir(false)
+    setReabrirMotivo('')
+    setReabrirProdutoId('')
+    setNoteProdutoId('')
   }, [selected.id, selected.status, selected.updated_at, selected.reembolso_valor, selected.reembolso_motivo])
 
   function requestClose() {
@@ -670,15 +696,52 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
     }
   }
 
-  async function viewPedido() {
-    setShowPedido(true)
-    if (pedido || loadingPedido) return
+  async function ensurePedidoLoaded() {
+    if (pedido || loadingPedido) return pedido
     setLoadingPedido(true)
     try {
-      setPedido(await onLoadPedido())
+      const result = await onLoadPedido()
+      setPedido(result)
+      return result
     } finally {
       setLoadingPedido(false)
     }
+  }
+
+  async function viewPedido() {
+    setShowPedido(true)
+    await ensurePedidoLoaded()
+  }
+
+  async function toggleReabrir() {
+    const next = !showReabrir
+    setShowReabrir(next)
+    if (next) await ensurePedidoLoaded()
+  }
+
+  async function confirmReabrir() {
+    if (!reabrirMotivo.trim()) return toast.warning('Informe o motivo da reabertura.')
+    if (!reabrirProdutoId) return toast.warning('Selecione o produto do pedido.')
+    const item = pedido?.itens.find(entry => entry.id === reabrirProdutoId)
+    setSavingReabrir(true)
+    try {
+      await onReabrir(reabrirMotivo.trim(), reabrirProdutoId, item?.descricao_produto ?? null)
+      setShowReabrir(false)
+      setReabrirMotivo('')
+      setReabrirProdutoId('')
+    } finally {
+      setSavingReabrir(false)
+    }
+  }
+
+  async function handleAddNote() {
+    if (noteProdutoId) {
+      const item = pedido?.itens.find(entry => entry.id === noteProdutoId)
+      onAddNote(noteProdutoId, item?.descricao_produto ?? null)
+    } else {
+      onAddNote()
+    }
+    setNoteProdutoId('')
   }
 
   function updateEdit(key: keyof WizardForm, value: string) {
@@ -719,6 +782,9 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
             <div className="min-w-0 flex-1">
               <h2 className="truncate text-xl font-bold text-gray-950">Pedido #{selected.numero_pedido ?? 'sem número'}</h2>
               <p className="mt-1 truncate text-sm text-gray-500">{selected.cliente ?? 'Cliente não informado'}</p>
+              {selected.reaberto_em && (
+                <p className="mt-1 text-xs font-semibold text-amber-600">Reaberto em {dateTime(selected.reaberto_em)}</p>
+              )}
             </div>
             <button
               type="button"
@@ -972,31 +1038,106 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                 <PackageSearch size={13} />
                 Visualizar pedido
               </button>
+              {selected.status === 'FINALIZADO' && (
+                <button
+                  type="button"
+                  onClick={toggleReabrir}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
+                >
+                  <ArrowRightCircle size={13} />
+                  Reabrir chamado
+                </button>
+              )}
             </section>
+
+            {showReabrir && (
+              <section className="space-y-3 rounded-2xl border border-red-200 bg-red-50 p-4">
+                <h3 className="text-sm font-bold text-red-800">Reabrir chamado</h3>
+                <label className="block text-xs font-semibold text-red-700">
+                  Produto do pedido
+                  <select
+                    value={reabrirProdutoId}
+                    onChange={event => setReabrirProdutoId(event.target.value)}
+                    disabled={loadingPedido}
+                    className="mt-1 w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                  >
+                    <option value="">{loadingPedido ? 'Carregando produtos...' : 'Selecione o produto'}</option>
+                    {pedido?.itens.map(item => (
+                      <option key={item.id} value={item.id}>{item.descricao_produto ?? item.codigo_produto ?? 'Produto'}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-xs font-semibold text-red-700">
+                  Motivo da reabertura
+                  <textarea
+                    value={reabrirMotivo}
+                    onChange={event => setReabrirMotivo(event.target.value)}
+                    rows={3}
+                    className="mt-1 w-full resize-none rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                  />
+                </label>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowReabrir(false)}
+                    className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmReabrir}
+                    disabled={savingReabrir}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-40"
+                  >
+                    {savingReabrir ? <LoaderCircle size={13} className="animate-spin" /> : <ArrowRightCircle size={13} />}
+                    Confirmar reabertura
+                  </button>
+                </div>
+              </section>
+            )}
 
             <section>
               <h3 className="mb-2 text-sm font-semibold text-gray-950">Histórico</h3>
               <div className="space-y-2">
                 {(selected.interacoes ?? []).map(item => (
                   <div key={item.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                    <div className="mb-1 flex items-center gap-2 text-xs text-gray-400">
+                    <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
                       <MessageSquareText size={13} />
                       {item.tipo} - {dateTime(item.realizado_em)}
+                      {item.produto_descricao && (
+                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">{item.produto_descricao}</span>
+                      )}
                     </div>
                     <p className="whitespace-pre-wrap text-sm text-gray-700">{item.descricao}</p>
                   </div>
                 ))}
               </div>
-              <div className="mt-3 flex gap-2">
-                <input
-                  value={note}
-                  onChange={event => setNote(event.target.value)}
-                  placeholder="Adicionar nota..."
-                  className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                />
-                <button onClick={onAddNote} className="rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700">
-                  Salvar
-                </button>
+              <div className="mt-3 space-y-2">
+                {selected.numero_pedido && (
+                  <select
+                    value={noteProdutoId}
+                    onFocus={() => ensurePedidoLoaded()}
+                    onChange={event => setNoteProdutoId(event.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">Vincular produto (opcional)</option>
+                    {pedido?.itens.map(item => (
+                      <option key={item.id} value={item.id}>{item.descricao_produto ?? item.codigo_produto ?? 'Produto'}</option>
+                    ))}
+                  </select>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    value={note}
+                    onChange={event => setNote(event.target.value)}
+                    placeholder="Adicionar nota..."
+                    className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                  <button onClick={handleAddNote} className="rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700">
+                    Salvar
+                  </button>
+                </div>
               </div>
             </section>
           </div>
@@ -1042,6 +1183,16 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   const [form, setForm] = useState<WizardForm>(emptyWizard)
   const [loadingPedido, setLoadingPedido] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [existingChamado, setExistingChamado] = useState<{ id: string; status: string } | null>(null)
+
+  async function checkExistingChamado(numeroPedido: string) {
+    try {
+      const { data } = await api.atendimentoPorPedido(getToken, numeroPedido)
+      setExistingChamado(data)
+    } catch {
+      setExistingChamado(null)
+    }
+  }
 
   function requestClose() {
     if (closing) return
@@ -1056,6 +1207,8 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   function applyPedido(next: PcpPedido) {
     setPedido(next)
     setSelectedItems([])
+    setExistingChamado(null)
+    checkExistingChamado(next.codigo_venda)
     setForm(prev => ({
       ...prev,
       numero_pedido: next.codigo_venda,
@@ -1388,6 +1541,12 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
                 </div>
               )}
               {pedido && <PedidoResumo pedido={pedido} />}
+              {existingChamado && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-semibold text-amber-800">Esse pedido já tem um chamado (status: {existingChamado.status}).</p>
+                  <p className="mt-1 text-xs text-amber-700">Use o histórico do chamado existente em vez de criar outro. Se ele estiver finalizado, abra e use "Reabrir chamado".</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -1546,7 +1705,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
             <button
               className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
               onClick={() => setStep(prev => Math.min(3, prev + 1))}
-              disabled={(step === 1 && !pedido) || (step === 2 && !selectedItems.length)}
+              disabled={(step === 1 && (!pedido || Boolean(existingChamado))) || (step === 2 && !selectedItems.length)}
             >
               Continuar
             </button>

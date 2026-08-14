@@ -532,8 +532,31 @@ app.get('/api/kanban/atendimentos', asyncRoute(async (req, res) => {
   res.json({ data: rows })
 }))
 
+app.get('/api/atendimentos/pedido/:numero', asyncRoute(async (req, res) => {
+  const numero = normalizePedidoCodigo(req.params.numero)
+  if (!numero) return res.json({ data: null })
+  const { rows } = await pool.query(
+    'select id, numero_pedido, cliente, status from cscx_atendimentos where numero_pedido = $1 limit 1',
+    [numero],
+  )
+  res.json({ data: rows[0] || null })
+}))
+
 app.post('/api/atendimentos', asyncRoute(async (req, res) => {
   const row = atendimentoFromBody(req.body)
+  // Um pedido só pode ter um chamado - se já existe um, o cliente tem que
+  // usar o histórico dele (com reabertura, se estiver finalizado) em vez de
+  // abrir outro. Duplicados que já existiam antes dessa regra ficam como
+  // estão, isso só bloqueia daqui pra frente.
+  if (row.numero_pedido) {
+    const { rows: existing } = await pool.query(
+      'select id, numero_pedido, cliente, status from cscx_atendimentos where numero_pedido = $1 limit 1',
+      [row.numero_pedido],
+    )
+    if (existing[0]) {
+      return res.status(409).json({ error: 'Já existe um chamado para este pedido.', existing: existing[0] })
+    }
+  }
   const inserted = await upsertAtendimento(row, getUserId(req))
   res.status(201).json({ data: inserted })
 }))
@@ -568,15 +591,40 @@ app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   res.json({ data: rows[0] })
 }))
 
+app.post('/api/atendimentos/:id/reabrir', asyncRoute(async (req, res) => {
+  const motivo = stringOrNull(req.body.motivo)
+  const produtoId = stringOrNull(req.body.produto_id)
+  const produtoDescricao = stringOrNull(req.body.produto_descricao)
+  if (!motivo) return res.status(400).json({ error: 'Informe o motivo da reabertura.' })
+  if (!produtoId) return res.status(400).json({ error: 'Selecione o produto do pedido.' })
+  const { rows: current } = await pool.query('select status from cscx_atendimentos where id = $1', [req.params.id])
+  if (!current[0]) return res.status(404).json({ error: 'Chamado não encontrado.' })
+  if (current[0].status !== 'FINALIZADO') return res.status(400).json({ error: 'Só é possível reabrir um chamado finalizado.' })
+  const userId = getUserId(req)
+  const { rows } = await pool.query(`
+    update cscx_atendimentos
+    set status = 'ABERTO', reaberto_em = now(), updated_by_clerk_user_id = $2
+    where id = $1
+    returning *
+  `, [req.params.id, userId])
+  await pool.query(`
+    insert into cscx_interacoes (atendimento_id, tipo, descricao, produto_id, produto_descricao, criado_por_clerk_user_id)
+    values ($1, 'reabertura', $2, $3, $4, $5)
+  `, [req.params.id, motivo, produtoId, produtoDescricao, userId])
+  res.json({ data: rows[0] })
+}))
+
 app.post('/api/atendimentos/:id/interacoes', asyncRoute(async (req, res) => {
   const tipo = String(req.body.tipo || 'nota')
   const descricao = String(req.body.descricao || '').trim()
   if (!descricao) return res.status(400).json({ error: 'Informe a descrição da interação.' })
+  const produtoId = stringOrNull(req.body.produto_id)
+  const produtoDescricao = stringOrNull(req.body.produto_descricao)
   const { rows } = await pool.query(`
-    insert into cscx_interacoes (atendimento_id, tipo, descricao, criado_por_clerk_user_id)
-    values ($1, $2, $3, $4)
+    insert into cscx_interacoes (atendimento_id, tipo, descricao, produto_id, produto_descricao, criado_por_clerk_user_id)
+    values ($1, $2, $3, $4, $5, $6)
     returning *
-  `, [req.params.id, tipo, descricao, getUserId(req)])
+  `, [req.params.id, tipo, descricao, produtoId, produtoDescricao, getUserId(req)])
   res.status(201).json({ data: rows[0] })
 }))
 
