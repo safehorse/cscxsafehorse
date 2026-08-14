@@ -19,7 +19,6 @@ import {
   PackageSearch,
   Pencil,
   Plus,
-  RefreshCw,
   Save,
   Search,
   UserPlus,
@@ -272,16 +271,6 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
               <ArrowLeft size={15} />
               Voltar
             </Link>
-          )}
-          {isChamadosPage && (
-            <button
-              type="button"
-              onClick={() => load()}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
-              title="Atualizar"
-            >
-              <RefreshCw size={15} />
-            </button>
           )}
           <Link
             to="/chamados"
@@ -1528,7 +1517,7 @@ function Listbox({ label, value, options, icon, emptyLabel, createTitle, onChang
     .slice(0, 8)
 
   function openList() {
-    setQuery(value)
+    setQuery('')
     setOpen(true)
   }
 

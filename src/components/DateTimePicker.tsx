@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, X } from 'lucide-react'
 
 type DateTimePickerProps = {
@@ -16,6 +17,23 @@ export function DateTimePicker({ label, value, onChange }: DateTimePickerProps) 
   const [month, setMonth] = useState(() => startOfMonth(selected ?? new Date()))
   const days = useMemo(() => calendarDays(month), [month])
   const time = selected ? timeValue(selected) : '09:00'
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function updateCoords() {
+      const rect = triggerRef.current?.getBoundingClientRect()
+      if (rect) setCoords({ top: rect.bottom + 8, left: rect.left, width: rect.width })
+    }
+    updateCoords()
+    window.addEventListener('scroll', updateCoords, true)
+    window.addEventListener('resize', updateCoords)
+    return () => {
+      window.removeEventListener('scroll', updateCoords, true)
+      window.removeEventListener('resize', updateCoords)
+    }
+  }, [open])
 
   function selectDay(day: Date) {
     const [hour, minute] = time.split(':').map(Number)
@@ -43,6 +61,7 @@ export function DateTimePicker({ label, value, onChange }: DateTimePickerProps) 
     <div className="relative">
       <span className="mb-1 block text-xs font-medium text-gray-500">{label}</span>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(prev => !prev)}
         className={`flex h-10 w-full items-center gap-2 rounded-xl border bg-white px-3 text-left text-sm outline-none transition-colors ${open ? 'border-blue-400 ring-2 ring-blue-100' : 'border-gray-200 hover:border-gray-300'}`}
@@ -67,8 +86,11 @@ export function DateTimePicker({ label, value, onChange }: DateTimePickerProps) 
         )}
       </button>
 
-      {open && (
-        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
+      {open && coords && createPortal(
+        <div
+          style={{ position: 'fixed', top: coords.top, left: coords.left, width: Math.max(coords.width, 300) }}
+          className="z-50 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl"
+        >
           <div className="border-b border-gray-100 bg-gray-50 p-3">
             <div className="flex items-center gap-2">
               <button
@@ -169,7 +191,8 @@ export function DateTimePicker({ label, value, onChange }: DateTimePickerProps) 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
