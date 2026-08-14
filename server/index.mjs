@@ -824,6 +824,46 @@ app.get('/api/pcp/clientes/:codigoCliente/pedidos', asyncRoute(async (req, res) 
   res.json({ data: (Array.isArray(data) ? data : []).map(normalizePcpPedido) })
 }))
 
+function sanitizePostgrestTerm(value) {
+  // Remove caracteres com significado especial no DSL de filtros do PostgREST
+  // (or=(...), operador.valor, curingas) pra evitar que o termo digitado pelo
+  // usuário escape do padrão ilike pretendido e altere o filtro.
+  return String(value || '').trim().replace(/[,()."*]/g, '').slice(0, 80)
+}
+
+app.get('/api/pcp/pedidos', asyncRoute(async (req, res) => {
+  if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
+  const cliente = sanitizePostgrestTerm(req.query.cliente)
+  const produto = sanitizePostgrestTerm(req.query.produto)
+  if (!cliente && !produto) return res.json({ data: [] })
+
+  const params = new URLSearchParams()
+  const select = produto
+    ? 'id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,situacao_erp,pedido_itens!inner(produto:produto_id!inner(nome))'
+    : 'id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,situacao_erp'
+  params.set('select', select)
+  if (produto) params.set('pedido_itens.produto.nome', `ilike.*${produto}*`)
+  if (cliente) params.set('or', `(codigo_cliente.eq.${cliente},nome_cliente.ilike.*${cliente}*)`)
+  params.set('order', 'data_pedido.desc')
+  params.set('limit', '20')
+
+  const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?${params.toString()}`, {
+    headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) return res.status(response.status).json({ error: data?.message || 'Falha ao buscar pedidos.' })
+  res.json({
+    data: (Array.isArray(data) ? data : []).map(row => ({
+      id: row.id,
+      codigo_venda: normalizePedidoCodigo(row.codigo_venda),
+      codigo_cliente: identifierOrNull(row.codigo_cliente),
+      nome_cliente: stringOrNull(row.nome_cliente),
+      data_pedido: row.data_pedido ?? null,
+      situacao_erp: row.situacao_erp ?? null,
+    })),
+  })
+}))
+
 app.post('/api/clientes/sync', asyncRoute(async (_req, res) => {
   const result = await syncClientesFromPcp()
   res.json({ data: result })

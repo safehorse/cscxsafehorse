@@ -31,7 +31,7 @@ import { DateTimePicker } from '../components/DateTimePicker'
 import { UserNameButton } from '../components/UserNameButton'
 import { api, type AtendimentoFilters } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
-import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, PcpPedidoItem } from '../lib/types'
+import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, PcpPedidoItem, PcpPedidoResumo } from '../lib/types'
 
 const STATUS_OPTIONS = ['ABERTO', 'AGUARDANDO DEVOLUÇÃO', 'FINALIZADO', 'EM ANÁLISE', 'EM PRODUÇÃO', 'CRÉDITO GERADO', 'TROCA GERADA']
 const PRIORIDADES = ['baixa', 'normal', 'alta', 'urgente'] as const
@@ -995,6 +995,11 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   const [closing, setClosing] = useState(false)
   const [step, setStep] = useState(1)
   const [codigoBusca, setCodigoBusca] = useState('')
+  const [semNumero, setSemNumero] = useState(false)
+  const [buscaCliente, setBuscaCliente] = useState('')
+  const [buscaProduto, setBuscaProduto] = useState('')
+  const [resultadosBusca, setResultadosBusca] = useState<PcpPedidoResumo[]>([])
+  const [loadingResultados, setLoadingResultados] = useState(false)
   const [pedido, setPedido] = useState<PcpPedido | null>(null)
   const [selectedItems, setSelectedItems] = useState<PcpPedidoItem[]>([])
   const [form, setForm] = useState<WizardForm>(emptyWizard)
@@ -1053,8 +1058,8 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
     applyItems(next)
   }
 
-  async function buscarPedido() {
-    const codigo = codigoBusca.trim()
+  async function buscarPedido(codigoOverride?: string) {
+    const codigo = (codigoOverride ?? codigoBusca).trim()
     if (!codigo) return
     setLoadingPedido(true)
     try {
@@ -1068,6 +1073,23 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
       toast.error(error instanceof Error ? error.message : 'Falha ao buscar pedido.')
     } finally {
       setLoadingPedido(false)
+    }
+  }
+
+  async function buscarPorClienteProduto() {
+    if (!buscaCliente.trim() && !buscaProduto.trim()) return
+    setLoadingResultados(true)
+    try {
+      const { data } = await api.pcpBuscarPedidos(getToken, {
+        cliente: buscaCliente.trim() || undefined,
+        produto: buscaProduto.trim() || undefined,
+      })
+      setResultadosBusca(data)
+      if (!data.length) toast.warning('Nenhum pedido encontrado.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao buscar pedidos.')
+    } finally {
+      setLoadingResultados(false)
     }
   }
 
@@ -1129,27 +1151,86 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
         <div className="p-5">
           {step === 1 && (
             <div className="space-y-5">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <PackageSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    value={codigoBusca}
-                    onChange={event => setCodigoBusca(event.target.value)}
-                    onKeyDown={event => { if (event.key === 'Enter') buscarPedido() }}
-                    placeholder="Numero do pedido"
-                    className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                  />
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={semNumero}
+                  onChange={event => setSemNumero(event.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-400"
+                />
+                Não sei o número do pedido
+              </label>
+
+              {!semNumero ? (
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <PackageSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      value={codigoBusca}
+                      onChange={event => setCodigoBusca(event.target.value)}
+                      onKeyDown={event => { if (event.key === 'Enter') buscarPedido() }}
+                      placeholder="Numero do pedido"
+                      className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => buscarPedido()}
+                    disabled={loadingPedido}
+                    className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    {loadingPedido ? <LoaderCircle size={16} className="animate-spin" /> : <Search size={16} />}
+                    Buscar
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={buscarPedido}
-                  disabled={loadingPedido}
-                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {loadingPedido ? <LoaderCircle size={16} className="animate-spin" /> : <Search size={16} />}
-                  Buscar
-                </button>
-              </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+                    <input
+                      value={buscaCliente}
+                      onChange={event => setBuscaCliente(event.target.value)}
+                      onKeyDown={event => { if (event.key === 'Enter') buscarPorClienteProduto() }}
+                      placeholder="Cliente (nome ou código)"
+                      className="h-11 min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    />
+                    <input
+                      value={buscaProduto}
+                      onChange={event => setBuscaProduto(event.target.value)}
+                      onKeyDown={event => { if (event.key === 'Enter') buscarPorClienteProduto() }}
+                      placeholder="Produto"
+                      className="h-11 min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={buscarPorClienteProduto}
+                      disabled={loadingResultados}
+                      className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                    >
+                      {loadingResultados ? <LoaderCircle size={16} className="animate-spin" /> : <Search size={16} />}
+                      Buscar
+                    </button>
+                  </div>
+
+                  {resultadosBusca.length > 0 && (
+                    <div className="max-h-72 space-y-2 overflow-y-auto">
+                      {resultadosBusca.map(item => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => buscarPedido(item.codigo_venda)}
+                          className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-200 p-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-gray-950">#{item.codigo_venda} - {item.nome_cliente ?? 'Cliente sem nome'}</p>
+                            <p className="text-xs text-gray-400">{date(item.data_pedido)} {item.situacao_erp ? `- ${item.situacao_erp}` : ''}</p>
+                          </div>
+                          <ChevronRight size={16} className="shrink-0 text-gray-400" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {pedido && <PedidoResumo pedido={pedido} />}
             </div>
           )}

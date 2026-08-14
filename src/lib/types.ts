@@ -89,6 +89,15 @@ export interface CadastroOptions {
   proximasAcoes: string[]
 }
 
+export interface PcpPedidoResumo {
+  id: string
+  codigo_venda: string
+  codigo_cliente: string | null
+  nome_cliente: string | null
+  data_pedido: string | null
+  situacao_erp: string | null
+}
+
 export interface PcpPedidoItem {
   id: string
   produto_id: string | null

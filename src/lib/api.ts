@@ -3,6 +3,7 @@ import type {
   CadastroOptions,
   DashboardData,
   PcpPedido,
+  PcpPedidoResumo,
   Usuario,
   WhatsappExtensaoStatus,
 } from './types'
@@ -107,6 +108,13 @@ export const api = {
 
   pcpPedidosCliente: (getToken: () => Promise<string | null>, codigoCliente: string) =>
     request<{ data: PcpPedido[] }>(`/api/pcp/clientes/${encodeURIComponent(codigoCliente)}/pedidos`, getToken),
+
+  pcpBuscarPedidos: (getToken: () => Promise<string | null>, filters: { cliente?: string; produto?: string }) => {
+    const qs = new URLSearchParams()
+    if (filters.cliente) qs.set('cliente', filters.cliente)
+    if (filters.produto) qs.set('produto', filters.produto)
+    return request<{ data: PcpPedidoResumo[] }>(`/api/pcp/pedidos?${qs.toString()}`, getToken)
+  },
 
   whatsappExtensaoStatus: (getToken: () => Promise<string | null>) =>
     request<{ data: WhatsappExtensaoStatus | null }>('/api/whatsapp/extensao', getToken),
