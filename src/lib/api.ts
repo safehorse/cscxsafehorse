@@ -42,6 +42,9 @@ export const api = {
   updateUsuario: (getToken: () => Promise<string | null>, id: string, body: Partial<Pick<Usuario, 'email' | 'nome' | 'papel' | 'ativo'>>) =>
     request<{ data: Usuario }>(`/api/usuarios/${id}`, getToken, { method: 'PATCH', body: JSON.stringify(body) }),
 
+  inviteUsuario: (getToken: () => Promise<string | null>, id: string) =>
+    request<{ data: Usuario; convite: { id: string | null; status: string; email: string } }>(`/api/usuarios/${id}/convite`, getToken, { method: 'POST' }),
+
   atendimentos: (getToken: () => Promise<string | null>, filters: { search?: string; status?: string; responsavel?: string; page?: number; pageSize?: number }) => {
     const qs = new URLSearchParams()
     if (filters.search) qs.set('search', filters.search)

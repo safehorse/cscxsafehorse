@@ -11,9 +11,11 @@ const DATABASE_URL = process.env.DATABASE_URL
 const CSCX_API_KEY = process.env.CSCX_API_KEY || ''
 const CLERK_JWKS_URL = process.env.CLERK_JWKS_URL || ''
 const CLERK_JWT_ISSUER = process.env.CLERK_JWT_ISSUER || ''
+const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY || ''
 const PCP_API_URL = (process.env.PCP_API_URL || '').replace(/\/$/, '')
 const PCP_API_KEY = process.env.PCP_API_KEY || ''
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173'
+const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || CORS_ORIGIN.split(',')[0] || 'https://cscx.safehorse.com.br').replace(/\/$/, '')
 
 if (!DATABASE_URL) {
   console.warn('DATABASE_URL não configurado. O servidor vai iniciar, mas as rotas de banco falharão.')
@@ -194,7 +196,7 @@ app.get('/api/agenda', asyncRoute(async (req, res) => {
 
 app.get('/api/usuarios', asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(`
-    select id, clerk_user_id, email, nome, papel, ativo, created_at, updated_at
+    select id, clerk_user_id, email, nome, papel, ativo, convite_id, convite_status, convite_enviado_em, created_at, updated_at
     from cscx_usuarios
     order by case papel when 'admin' then 0 else 1 end, nome nulls last, email
   `)
@@ -261,6 +263,31 @@ app.post('/api/usuarios', asyncRoute(async (req, res) => {
     returning *
   `, [email, nome, papel, ativo])
   res.status(201).json({ data: rows[0] })
+}))
+
+app.post('/api/usuarios/:id/convite', asyncRoute(async (req, res) => {
+  const usuario = await pool.query('select * from cscx_usuarios where id = $1', [req.params.id])
+  if (!usuario.rows[0]) return res.status(404).json({ error: 'Usuário não encontrado.' })
+  if (!usuario.rows[0].ativo) return res.status(400).json({ error: 'Ative o usuário antes de enviar o convite.' })
+
+  const invitation = await createClerkInvitation(usuario.rows[0])
+  const { rows } = await pool.query(`
+    update cscx_usuarios
+    set convite_id = $2,
+        convite_status = $3,
+        convite_enviado_em = now()
+    where id = $1
+    returning *
+  `, [usuario.rows[0].id, invitation.id ?? null, invitation.status ?? 'sent'])
+
+  res.json({
+    data: rows[0],
+    convite: {
+      id: invitation.id ?? null,
+      status: invitation.status ?? 'sent',
+      email: invitation.email_address ?? usuario.rows[0].email,
+    },
+  })
 }))
 
 app.patch('/api/usuarios/:id', asyncRoute(async (req, res) => {
@@ -518,6 +545,41 @@ function normalizePapel(value) {
   return value === 'admin' ? 'admin' : 'cs'
 }
 
+async function createClerkInvitation(usuario) {
+  if (!CLERK_SECRET_KEY) {
+    const error = new Error('CLERK_SECRET_KEY não configurado no backend.')
+    error.status = 500
+    throw error
+  }
+
+  const response = await fetch('https://api.clerk.com/v1/invitations', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${CLERK_SECRET_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email_address: usuario.email,
+      redirect_url: `${PUBLIC_APP_URL}/login`,
+      notify: true,
+      ignore_existing: true,
+      public_metadata: {
+        app: 'cscx',
+        role: usuario.papel,
+        name: usuario.nome,
+      },
+    }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const clerkMessage = data?.errors?.[0]?.long_message || data?.errors?.[0]?.message || data?.message
+    const error = new Error(clerkMessage || 'Falha ao enviar convite pelo Clerk.')
+    error.status = response.status
+    throw error
+  }
+  return data
+}
+
 async function upsertAtendimento(row, userId) {
   const fields = [
     'data_solicitacao', 'numero_pedido', 'codigo_cliente', 'cliente', 'codigo_produto', 'descricao_produto',
@@ -617,7 +679,7 @@ async function hydrateItemValuesFromHistory(pedido) {
 
 app.use((err, _req, res, _next) => {
   console.error(err)
-  res.status(500).json({ error: err.message || 'Erro interno.' })
+  res.status(err.status || 500).json({ error: err.message || 'Erro interno.' })
 })
 
 app.listen(PORT, () => {

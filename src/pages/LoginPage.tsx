@@ -1,4 +1,4 @@
-import { SignIn } from '@clerk/clerk-react'
+import { SignIn, SignUp } from '@clerk/clerk-react'
 
 const appearance = {
   variables: {
@@ -24,10 +24,14 @@ const appearance = {
 }
 
 export function LoginPage() {
+  const authParams = `${window.location.search}${window.location.hash}`
+  const hasInvitation = authParams.includes('__clerk_ticket')
+  const ClerkAuth = hasInvitation ? SignUp : SignIn
+
   return (
     <main className="grid min-h-screen place-items-center bg-gray-50 px-4 py-10">
       <div className="w-full max-w-sm">
-        <SignIn routing="hash" fallbackRedirectUrl="/" appearance={appearance} />
+        <ClerkAuth routing="hash" fallbackRedirectUrl="/" signInUrl="/login" appearance={appearance} />
       </div>
     </main>
   )

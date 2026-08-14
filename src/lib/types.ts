@@ -55,6 +55,9 @@ export interface Usuario {
   nome: string | null
   papel: 'admin' | 'cs'
   ativo: boolean
+  convite_id: string | null
+  convite_status: string | null
+  convite_enviado_em: string | null
   created_at: string
   updated_at: string
 }

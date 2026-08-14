@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   LoaderCircle,
   LogOut,
+  Mail,
   RefreshCw,
   ShieldCheck,
   User,
@@ -22,6 +23,7 @@ type UsuarioForm = {
   nome: string
   papel: 'admin' | 'cs'
   ativo: boolean
+  enviarConvite: boolean
 }
 
 const emptyForm: UsuarioForm = {
@@ -29,6 +31,7 @@ const emptyForm: UsuarioForm = {
   nome: '',
   papel: 'cs',
   ativo: true,
+  enviarConvite: true,
 }
 
 export function UsuariosPage() {
@@ -38,6 +41,7 @@ export function UsuariosPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [invitingId, setInvitingId] = useState<string | null>(null)
   const [form, setForm] = useState<UsuarioForm>(emptyForm)
 
   async function load() {
@@ -72,19 +76,38 @@ export function UsuariosPage() {
     if (!form.email.trim()) return toast.warning('Informe o email.')
     setSaving(true)
     try {
-      await api.saveUsuario(getToken, {
+      const { data } = await api.saveUsuario(getToken, {
         email: form.email,
         nome: form.nome || null,
         papel: form.papel,
         ativo: form.ativo,
       })
+      if (form.enviarConvite && data.ativo) {
+        const invited = await api.inviteUsuario(getToken, data.id)
+        setUsuarios(prev => upsertUsuario(prev, invited.data))
+        toast.success('Convite enviado por e-mail.')
+      } else {
+        toast.success('Usuário salvo.')
+      }
       setForm(emptyForm)
       await load()
-      toast.success('Usuário salvo.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao salvar usuário.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function inviteUsuario(id: string) {
+    setInvitingId(id)
+    try {
+      const { data } = await api.inviteUsuario(getToken, id)
+      setUsuarios(prev => prev.map(item => item.id === id ? data : item))
+      toast.success('Convite enviado por e-mail.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao enviar convite.')
+    } finally {
+      setInvitingId(null)
     }
   }
 
@@ -189,14 +212,24 @@ export function UsuariosPage() {
               Ativo
             </label>
 
+            <label className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+              <input
+                type="checkbox"
+                checked={form.enviarConvite}
+                onChange={event => updateForm('enviarConvite', event.target.checked)}
+                className="h-4 w-4 rounded border-blue-300"
+              />
+              Enviar convite por e-mail agora
+            </label>
+
             <button
               type="button"
               onClick={save}
               disabled={saving}
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
             >
-              {saving ? <LoaderCircle size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-              Salvar usuário
+              {saving ? <LoaderCircle size={16} className="animate-spin" /> : form.enviarConvite ? <Mail size={16} /> : <CheckCircle2 size={16} />}
+              {form.enviarConvite ? 'Salvar e enviar convite' : 'Salvar usuário'}
             </button>
           </div>
         </section>
@@ -217,7 +250,7 @@ export function UsuariosPage() {
           ) : (
             <div className="divide-y divide-gray-100">
               {usuarios.map(usuario => (
-                <div key={usuario.id} className="grid gap-3 px-4 py-4 md:grid-cols-[1fr_140px_120px_120px] md:items-center">
+                <div key={usuario.id} className="grid gap-3 px-4 py-4 md:grid-cols-[1fr_140px_120px_150px_120px] md:items-center">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-semibold text-gray-950">{usuario.nome || usuario.email}</p>
@@ -225,7 +258,7 @@ export function UsuariosPage() {
                       {!usuario.ativo && <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500">Inativo</span>}
                     </div>
                     <p className="mt-1 truncate text-sm text-gray-500">{usuario.email}</p>
-                    <p className="mt-0.5 text-xs text-gray-400">{usuario.clerk_user_id ? 'Vinculado ao Clerk' : 'Aguardando primeiro login'}</p>
+                    <p className="mt-0.5 text-xs text-gray-400">{usuario.clerk_user_id ? 'Conta criada no Clerk' : invitationLabel(usuario)}</p>
                   </div>
 
                   <select
@@ -244,6 +277,22 @@ export function UsuariosPage() {
                   >
                     {usuario.ativo ? 'Ativo' : 'Inativo'}
                   </button>
+
+                  {usuario.clerk_user_id ? (
+                    <span className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700">
+                      Conta criada
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => inviteUsuario(usuario.id)}
+                      disabled={!usuario.ativo || invitingId === usuario.id}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-40"
+                    >
+                      {invitingId === usuario.id ? <LoaderCircle size={15} className="animate-spin" /> : <Mail size={15} />}
+                      {usuario.convite_enviado_em ? 'Reenviar' : 'Enviar convite'}
+                    </button>
+                  )}
 
                   <div className="text-xs text-gray-400 md:text-right">
                     {date(usuario.updated_at)}
@@ -266,6 +315,16 @@ function RoleBadge({ papel }: { papel: Usuario['papel'] }) {
       {admin ? 'Admin' : 'CS'}
     </span>
   )
+}
+
+function upsertUsuario(items: Usuario[], usuario: Usuario) {
+  const exists = items.some(item => item.id === usuario.id)
+  return exists ? items.map(item => item.id === usuario.id ? usuario : item) : [usuario, ...items]
+}
+
+function invitationLabel(usuario: Usuario) {
+  if (!usuario.convite_enviado_em) return 'Aguardando convite'
+  return `Convite enviado em ${date(usuario.convite_enviado_em)}`
 }
 
 function date(value?: string | null) {
