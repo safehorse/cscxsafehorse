@@ -537,7 +537,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   const [step, setStep] = useState(1)
   const [codigoBusca, setCodigoBusca] = useState('')
   const [pedido, setPedido] = useState<PcpPedido | null>(null)
-  const [selectedItem, setSelectedItem] = useState<PcpPedidoItem | null>(null)
+  const [selectedItems, setSelectedItems] = useState<PcpPedidoItem[]>([])
   const [form, setForm] = useState<WizardForm>(emptyWizard)
   const [loadingPedido, setLoadingPedido] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -548,7 +548,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
 
   function applyPedido(next: PcpPedido) {
     setPedido(next)
-    setSelectedItem(null)
+    setSelectedItems([])
     setForm(prev => ({
       ...prev,
       numero_pedido: next.codigo_venda,
@@ -558,25 +558,34 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
       data_solicitacao: prev.data_solicitacao || new Date().toISOString().slice(0, 10),
       descricao_situacao: next.observacoes ?? prev.descricao_situacao,
     }))
-    if (next.itens.length === 1) applyItem(next.itens[0], next)
+    if (next.itens.length === 1) applyItems([next.itens[0]], next)
     setStep(next.itens.length === 1 ? 3 : 2)
   }
 
-  function applyItem(item: PcpPedidoItem, sourcePedido = pedido) {
-    setSelectedItem(item)
+  function applyItems(items: PcpPedidoItem[], sourcePedido = pedido) {
+    setSelectedItems(items)
+    const resumo = summarizeItems(items)
     setForm(prev => ({
       ...prev,
       numero_pedido: sourcePedido?.codigo_venda ?? prev.numero_pedido,
       codigo_cliente: sourcePedido?.codigo_cliente ?? prev.codigo_cliente,
       cliente: sourcePedido?.nome_cliente ?? prev.cliente,
       vendedor: sourcePedido?.vendedor ?? prev.vendedor,
-      codigo_produto: item.codigo_produto ?? '',
-      descricao_produto: item.descricao_produto ?? '',
-      quantidade: item.quantidade != null ? String(item.quantidade) : '',
-      valor_unitario: item.valor_unitario != null ? String(round2(item.valor_unitario)) : '',
-      valor_total: item.valor_total != null ? String(round2(item.valor_total)) : '',
-      descricao_situacao: item.obs ?? prev.descricao_situacao,
+      codigo_produto: resumo.codigo_produto,
+      descricao_produto: resumo.descricao_produto,
+      quantidade: resumo.quantidade,
+      valor_unitario: resumo.valor_unitario,
+      valor_total: resumo.valor_total,
+      descricao_situacao: resumo.observacoes || prev.descricao_situacao,
     }))
+  }
+
+  function toggleItem(item: PcpPedidoItem) {
+    const exists = selectedItems.some(selected => selected.id === item.id)
+    const next = exists
+      ? selectedItems.filter(selected => selected.id !== item.id)
+      : [...selectedItems, item]
+    applyItems(next)
   }
 
   async function buscarPedido() {
@@ -612,7 +621,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
 
   async function save() {
     if (!pedido) return toast.warning('Busque o pedido.')
-    if (!selectedItem) return toast.warning('Selecione o produto.')
+    if (!selectedItems.length) return toast.warning('Selecione pelo menos um produto.')
     if (!form.motivo.trim()) return toast.warning('Informe o motivo.')
     if (!form.setor.trim()) return toast.warning('Informe o setor.')
     if (!form.responsavel.trim()) return toast.warning('Informe o responsavel.')
@@ -622,8 +631,8 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
       const { data } = await api.createAtendimento(getToken, {
         ...formToPayload(form),
         pcp_pedido_id: pedido.id,
-        pcp_item_id: selectedItem.id,
-        pcp_payload: { pedido, item: selectedItem },
+        pcp_item_id: selectedItems.length === 1 ? selectedItems[0].id : null,
+        pcp_payload: { pedido, itens: selectedItems },
       })
       onSaved(data)
     } catch (error) {
@@ -682,25 +691,52 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
           {step === 2 && pedido && (
             <div className="space-y-3">
               <PedidoResumo pedido={pedido} />
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                <PackageSearch size={16} className="text-blue-600" />
+                <p className="text-sm font-semibold text-blue-950">
+                  {selectedItems.length} produto{selectedItems.length !== 1 ? 's' : ''} selecionado{selectedItems.length !== 1 ? 's' : ''}
+                </p>
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => applyItems(pedido.itens, pedido)}
+                  className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                >
+                  Selecionar todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyItems([], pedido)}
+                  disabled={!selectedItems.length}
+                  className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-40"
+                >
+                  Limpar
+                </button>
+              </div>
               <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200">
-                {pedido.itens.map(item => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => { applyItem(item); setStep(3) }}
-                    className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-gray-50"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-gray-950">{item.descricao_produto ?? 'Produto sem nome'}</p>
-                      <p className="text-xs text-gray-400">ERP {item.codigo_produto ?? '-'} - Qtd {item.quantidade ?? '-'}</p>
-                    </div>
-                    <div className="text-right text-xs text-gray-500">
-                      <p>{money(item.valor_total)}</p>
-                      <p>{money(item.valor_unitario)} un.</p>
-                    </div>
-                    <ChevronRight size={16} className="text-gray-300" />
-                  </button>
-                ))}
+                {pedido.itens.map(item => {
+                  const checked = selectedItems.some(selected => selected.id === item.id)
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => toggleItem(item)}
+                      className={`flex w-full items-center gap-4 px-4 py-3 text-left transition-colors ${checked ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}
+                    >
+                      <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border text-white ${checked ? 'border-blue-600 bg-blue-600' : 'border-gray-300 bg-white'}`}>
+                        {checked && <CheckCircle2 size={14} />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-gray-950">{item.descricao_produto ?? 'Produto sem nome'}</p>
+                        <p className="text-xs text-gray-400">ERP {item.codigo_produto ?? '-'} - Qtd {item.quantidade ?? '-'}</p>
+                      </div>
+                      <div className="text-right text-xs text-gray-500">
+                        <p>{money(item.valor_total)}</p>
+                        <p>{money(item.valor_unitario)} un.</p>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -712,11 +748,30 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
                 <Info label="ID cliente" value={form.codigo_cliente} />
                 <Info label="Cliente" value={form.cliente} />
                 <Info label="Vendedor" value={form.vendedor} />
-                <Info label="Produto" value={form.descricao_produto} />
-                <Info label="Codigo produto" value={form.codigo_produto} />
+                <Info label={selectedItems.length > 1 ? 'Produtos' : 'Produto'} value={form.descricao_produto} />
+                <Info label={selectedItems.length > 1 ? 'Codigos produtos' : 'Codigo produto'} value={form.codigo_produto} />
                 <Info label="Quantidade" value={form.quantidade} />
                 <Info label="Valor total" value={money(form.valor_total)} />
               </div>
+
+              {selectedItems.length > 1 && (
+                <div className="overflow-hidden rounded-2xl border border-gray-200">
+                  <div className="border-b border-gray-100 bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-500">
+                    Produtos selecionados
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {selectedItems.map(item => (
+                      <div key={item.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-gray-900">{item.descricao_produto ?? 'Produto sem nome'}</p>
+                          <p className="text-xs text-gray-400">ERP {item.codigo_produto ?? '-'} - Qtd {item.quantidade ?? '-'}</p>
+                        </div>
+                        <span className="text-xs font-semibold text-gray-600">{money(item.valor_total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Motivo" value={form.motivo} onChange={value => update('motivo', value)} />
@@ -770,7 +825,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
             <button
               className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
               onClick={() => setStep(prev => Math.min(3, prev + 1))}
-              disabled={(step === 1 && !pedido) || (step === 2 && !selectedItem)}
+              disabled={(step === 1 && !pedido) || (step === 2 && !selectedItems.length)}
             >
               Continuar
             </button>
@@ -938,6 +993,38 @@ function money(value?: string | number | null) {
 
 function round2(value: number) {
   return Math.round(value * 100) / 100
+}
+
+function summarizeItems(items: PcpPedidoItem[]) {
+  const codigos = compactJoin(items.map(item => item.codigo_produto), ', ')
+  const descricoes = compactJoin(items.map(item => item.descricao_produto), ' | ')
+  const quantidadeTotal = sumNumbers(items.map(item => item.quantidade))
+  const valorTotal = sumNumbers(items.map(item => item.valor_total))
+  const valorUnitario = items.length === 1
+    ? items[0].valor_unitario
+    : valorTotal != null && quantidadeTotal ? valorTotal / quantidadeTotal : null
+
+  return {
+    codigo_produto: codigos,
+    descricao_produto: items.length > 1 ? `${items.length} produtos: ${descricoes}` : descricoes,
+    quantidade: quantidadeTotal != null ? String(round2(quantidadeTotal)) : '',
+    valor_unitario: valorUnitario != null ? String(round2(valorUnitario)) : '',
+    valor_total: valorTotal != null ? String(round2(valorTotal)) : '',
+    observacoes: compactJoin(items.map(item => item.obs), '\n'),
+  }
+}
+
+function sumNumbers(values: Array<number | null | undefined>) {
+  const valid = values.filter((value): value is number => value !== null && value !== undefined && Number.isFinite(Number(value)))
+  if (!valid.length) return null
+  return valid.reduce((total, value) => total + Number(value), 0)
+}
+
+function compactJoin(values: Array<string | null | undefined>, separator: string) {
+  return values
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .join(separator)
 }
 
 function formToPayload(form: WizardForm) {
