@@ -1039,16 +1039,22 @@ function getWhatsappStatus(userId) {
 
 async function ensureWhatsappClient(userId) {
   const session = getWhatsappSession(userId)
-  if (session.client && session.state.status === 'iniciando' && session.state.startedAt) {
+  if (session.client && session.state.status !== 'conectado' && session.state.startedAt) {
     const elapsed = Date.now() - new Date(session.state.startedAt).getTime()
-    if (elapsed > 90_000) await disconnectWhatsapp(userId)
+    if (elapsed > 180_000) await disconnectWhatsapp(userId)
   }
   if (session.client) return session.client
 
   if (whatsappLaunchingUserId && whatsappLaunchingUserId !== userId) {
-    const error = new Error('Outro atendente está conectando o WhatsApp agora. Aguarde alguns segundos e tente novamente.')
-    error.status = 409
-    throw error
+    const lockedSession = getWhatsappSession(whatsappLaunchingUserId)
+    const lockedElapsed = lockedSession.state.startedAt ? Date.now() - new Date(lockedSession.state.startedAt).getTime() : Infinity
+    if (lockedElapsed > 180_000) {
+      await disconnectWhatsapp(whatsappLaunchingUserId)
+    } else {
+      const error = new Error('Outro atendente está conectando o WhatsApp agora. Aguarde alguns segundos e tente novamente.')
+      error.status = 409
+      throw error
+    }
   }
   whatsappLaunchingUserId = userId
 
@@ -1082,13 +1088,11 @@ async function ensureWhatsappClient(userId) {
   }
 
   client.on('qr', async qr => {
-    clearLaunchLock()
     const dataUrl = await qrcode.toDataURL(qr, { margin: 1, width: 320 })
     setWhatsappState(userId, { status: 'aguardando_qr', qr: dataUrl, erro: null })
   })
 
   client.on('authenticated', () => {
-    clearLaunchLock()
     setWhatsappState(userId, { status: 'autenticado', qr: null, erro: null })
   })
 
