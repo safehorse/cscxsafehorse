@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "CS/CX Safe Horse - WhatsApp Bridge",
+  "version": "1.0.0",
+  "description": "Conecta o WhatsApp Web (nesta aba) ao painel CS/CX Safe Horse.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://cscx.safehorse.com.br/*"
+  ],
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content-bridge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content-main.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ]
+}

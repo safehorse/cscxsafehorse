@@ -7,6 +7,7 @@ import type {
   WhatsappChat,
   WhatsappClienteSugestao,
   WhatsappContato,
+  WhatsappExtensaoStatus,
   WhatsappMensagem,
   WhatsappStatus,
 } from './types'
@@ -129,6 +130,12 @@ export const api = {
 
   whatsappClientes: (getToken: () => Promise<string | null>, search: string) =>
     request<{ data: WhatsappClienteSugestao[] }>(`/api/whatsapp/clientes?search=${encodeURIComponent(search)}`, getToken),
+
+  whatsappExtensaoStatus: (getToken: () => Promise<string | null>) =>
+    request<{ data: WhatsappExtensaoStatus | null }>('/api/whatsapp/extensao', getToken),
+
+  whatsappExtensaoToken: (getToken: () => Promise<string | null>) =>
+    request<{ data: WhatsappExtensaoStatus }>('/api/whatsapp/extensao/token', getToken, { method: 'POST' }),
 }
 
 function buildAtendimentoQuery(filters: AtendimentoFilters) {

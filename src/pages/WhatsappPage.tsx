@@ -4,12 +4,15 @@ import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
   CheckCircle2,
+  Copy,
+  Download,
   Grid3X3,
   LoaderCircle,
   LogOut,
   MessageCircle,
   Package,
   Phone,
+  Puzzle,
   RefreshCw,
   Save,
   Search,
@@ -22,7 +25,7 @@ import logoSrc from '../assets/logo.png'
 import { UserNameButton } from '../components/UserNameButton'
 import { api } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
-import type { Atendimento, PcpPedido, WhatsappChat, WhatsappClienteSugestao, WhatsappContato, WhatsappMensagem, WhatsappStatus } from '../lib/types'
+import type { Atendimento, PcpPedido, WhatsappChat, WhatsappClienteSugestao, WhatsappContato, WhatsappExtensaoStatus, WhatsappMensagem, WhatsappStatus } from '../lib/types'
 
 type Selection = {
   contato: WhatsappContato | null
@@ -56,8 +59,12 @@ export function WhatsappPage() {
   const [sugestoes, setSugestoes] = useState<WhatsappClienteSugestao[]>([])
   const [pedidos, setPedidos] = useState<PcpPedido[]>([])
   const [loadingPedidos, setLoadingPedidos] = useState(false)
+  const [extensaoStatus, setExtensaoStatus] = useState<WhatsappExtensaoStatus | null>(null)
+  const [loadingExtensao, setLoadingExtensao] = useState(false)
+  const [connectTab, setConnectTab] = useState<'extensao' | 'servidor'>('extensao')
 
-  const connected = status.status === 'conectado'
+  const extensaoConectada = extensaoStatus?.status === 'conectado'
+  const connected = status.status === 'conectado' || extensaoConectada
   const filteredChats = useMemo(() => {
     const term = search.trim().toLowerCase()
     if (!term) return chats
@@ -73,13 +80,42 @@ export function WhatsappPage() {
   async function loadStatus(silent = false) {
     if (!silent) setLoadingStatus(true)
     try {
-      const { data } = await api.whatsappStatus(getToken)
-      setStatus(data)
-      if (data.status === 'conectado') await loadChats(true, true)
+      const [statusResult, extensaoResult] = await Promise.all([
+        api.whatsappStatus(getToken),
+        api.whatsappExtensaoStatus(getToken).catch(() => ({ data: null })),
+      ])
+      setStatus(statusResult.data)
+      setExtensaoStatus(extensaoResult.data)
+      if (statusResult.data.status === 'conectado' || extensaoResult.data?.status === 'conectado') {
+        await loadChats(true, true)
+      }
     } catch (error) {
       if (!silent) toast.error(error instanceof Error ? error.message : 'Falha ao consultar WhatsApp.')
     } finally {
       if (!silent) setLoadingStatus(false)
+    }
+  }
+
+  async function generateExtensaoToken() {
+    setLoadingExtensao(true)
+    try {
+      const { data } = await api.whatsappExtensaoToken(getToken)
+      setExtensaoStatus(data)
+      toast.success('Código gerado. Cole na extensão.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao gerar código.')
+    } finally {
+      setLoadingExtensao(false)
+    }
+  }
+
+  async function copyExtensaoToken() {
+    if (!extensaoStatus?.token) return
+    try {
+      await navigator.clipboard.writeText(extensaoStatus.token)
+      toast.success('Código copiado.')
+    } catch {
+      toast.error('Não foi possível copiar. Selecione e copie manualmente.')
     }
   }
 
@@ -113,7 +149,7 @@ export function WhatsappPage() {
   }
 
   async function loadChats(silent = false, force = false) {
-    if (!force && status.status !== 'conectado') return
+    if (!force && !connected) return
     if (!silent) setLoadingChats(true)
     try {
       const { data } = await api.whatsappChats(getToken)
@@ -248,7 +284,7 @@ export function WhatsappPage() {
       </header>
 
       {!connected ? (
-        <main className="grid min-h-0 flex-1 place-items-center p-4">
+        <main className="grid min-h-0 flex-1 place-items-center overflow-y-auto p-4">
           <section className="w-full max-w-md rounded-2xl border border-white/10 bg-white p-6 text-gray-950 shadow-2xl">
             <div className="mb-5 flex items-center gap-3">
               <div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
@@ -256,61 +292,138 @@ export function WhatsappPage() {
               </div>
               <div>
                 <h2 className="font-bold">Conectar WhatsApp</h2>
-                <p className="text-sm text-gray-500">{statusLabel(status)}</p>
+                <p className="text-sm text-gray-500">
+                  {connectTab === 'extensao' ? extensaoLabel(extensaoStatus) : statusLabel(status)}
+                </p>
               </div>
             </div>
 
-            {status.qr ? (
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                <img src={status.qr} alt="QR Code do WhatsApp" className="mx-auto h-72 w-72 rounded-xl bg-white p-2" />
+            <div className="mb-5 flex rounded-xl bg-gray-100 p-1 text-sm font-semibold">
+              <button
+                type="button"
+                onClick={() => setConnectTab('extensao')}
+                className={`flex-1 rounded-lg py-2 transition-colors ${connectTab === 'extensao' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-500'}`}
+              >
+                Extensão
+              </button>
+              <button
+                type="button"
+                onClick={() => setConnectTab('servidor')}
+                className={`flex-1 rounded-lg py-2 transition-colors ${connectTab === 'servidor' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-500'}`}
+              >
+                Servidor (QR)
+              </button>
+            </div>
+
+            {connectTab === 'extensao' ? (
+              <div className="space-y-4">
+                <a
+                  href="/whatsapp-extension.zip"
+                  download
+                  className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 transition-colors hover:bg-gray-100"
+                >
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+                    <Download size={18} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold">Baixar extensão</span>
+                    <span className="block text-xs text-gray-500">Instale como extensão "não empacotada" no Chrome</span>
+                  </span>
+                </a>
+
+                <div className="rounded-xl border border-gray-200 p-3">
+                  <p className="mb-2 text-xs font-semibold text-gray-500">Código de pareamento</p>
+                  {extensaoStatus?.token ? (
+                    <div className="flex items-center gap-2">
+                      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg bg-gray-100 px-2 py-1.5 text-xs">{extensaoStatus.token}</code>
+                      <button
+                        type="button"
+                        onClick={copyExtensaoToken}
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+                        title="Copiar código"
+                      >
+                        <Copy size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={generateExtensaoToken}
+                      disabled={loadingExtensao}
+                      className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-gray-900 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
+                    >
+                      {loadingExtensao ? <LoaderCircle className="animate-spin" size={14} /> : <Puzzle size={14} />}
+                      Gerar código
+                    </button>
+                  )}
+                </div>
+
+                <ol className="space-y-1.5 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
+                  <li>1. Baixe e descompacte a extensão, ative o "modo de desenvolvedor" em chrome://extensions e carregue a pasta.</li>
+                  <li>2. Clique no ícone da extensão, cole o código acima e salve.</li>
+                  <li>3. Abra web.whatsapp.com numa aba e escaneie o QR normalmente, se ainda não estiver logado.</li>
+                </ol>
+
+                <div className={`flex items-center gap-2 rounded-xl p-3 text-sm font-medium ${extensaoConectada ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-500'}`}>
+                  {extensaoConectada ? <CheckCircle2 size={16} /> : <LoaderCircle size={16} className={extensaoStatus?.token ? 'animate-spin' : ''} />}
+                  {extensaoLabel(extensaoStatus)}
+                </div>
               </div>
             ) : (
-              <div className="grid h-72 place-items-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 text-center text-sm text-gray-500">
-                {loadingStatus || status.status === 'iniciando' || status.status === 'autenticado' ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <LoaderCircle className="animate-spin text-emerald-600" size={30} />
-                    <p className="font-medium text-gray-500">{statusLabel(status)}</p>
+              <>
+                {status.qr ? (
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <img src={status.qr} alt="QR Code do WhatsApp" className="mx-auto h-72 w-72 rounded-xl bg-white p-2" />
                   </div>
                 ) : (
-                  <MessageCircle className="text-gray-300" size={42} />
+                  <div className="grid h-72 place-items-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 text-center text-sm text-gray-500">
+                    {loadingStatus || status.status === 'iniciando' || status.status === 'autenticado' ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <LoaderCircle className="animate-spin text-emerald-600" size={30} />
+                        <p className="font-medium text-gray-500">{statusLabel(status)}</p>
+                      </div>
+                    ) : (
+                      <MessageCircle className="text-gray-300" size={42} />
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
 
-            {status.erro && (
-              <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-                {status.erro}
-              </div>
-            )}
-
-            <div className="mt-5 flex gap-3">
-              <button
-                type="button"
-                onClick={connect}
-                disabled={loadingStatus || status.status === 'iniciando'}
-                className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
-              >
-                {loadingStatus || status.status === 'iniciando' ? (
-                  <>
-                    <LoaderCircle className="animate-spin" size={16} />
-                    Conectando...
-                  </>
-                ) : (
-                  <>
-                    <MessageCircle size={16} />
-                    Conectar
-                  </>
+                {status.erro && (
+                  <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                    {status.erro}
+                  </div>
                 )}
-              </button>
-              <button
-                type="button"
-                onClick={disconnect}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-              >
-                <Unlink size={16} />
-                Limpar
-              </button>
-            </div>
+
+                <div className="mt-5 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={connect}
+                    disabled={loadingStatus || status.status === 'iniciando'}
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {loadingStatus || status.status === 'iniciando' ? (
+                      <>
+                        <LoaderCircle className="animate-spin" size={16} />
+                        Conectando...
+                      </>
+                    ) : (
+                      <>
+                        <MessageCircle size={16} />
+                        Conectar
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={disconnect}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+                  >
+                    <Unlink size={16} />
+                    Limpar
+                  </button>
+                </div>
+              </>
+            )}
           </section>
         </main>
       ) : (
@@ -546,6 +659,12 @@ export function WhatsappPage() {
       )}
     </div>
   )
+}
+
+function extensaoLabel(extensao: WhatsappExtensaoStatus | null) {
+  if (extensao?.status === 'conectado') return 'Extensão conectada'
+  if (extensao?.token) return 'Aguardando a extensão conectar...'
+  return 'Gere um código para parear a extensão'
 }
 
 function statusLabel(status: WhatsappStatus) {

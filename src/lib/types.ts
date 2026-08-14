@@ -122,6 +122,12 @@ export interface WhatsappStatus {
   updated_at: string
 }
 
+export interface WhatsappExtensaoStatus {
+  token: string
+  status: 'desconectado' | 'conectado'
+  ultimo_ping: string | null
+}
+
 export interface WhatsappChat {
   id: string
   telefone: string
