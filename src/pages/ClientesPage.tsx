@@ -9,17 +9,21 @@ import {
   List,
   LoaderCircle,
   LogOut,
+  MessageCircle,
   MessageSquareText,
+  Package,
   Phone,
   RefreshCw,
   Search,
   UsersRound,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import logoSrc from '../assets/logo.png'
 import { UserNameButton } from '../components/UserNameButton'
 import { api } from '../lib/api'
-import type { Cliente } from '../lib/types'
+import { getStatusTone } from '../lib/statusStyles'
+import type { Atendimento, Cliente, PcpPedido } from '../lib/types'
 
 const PAGE_SIZE = 30
 
@@ -32,6 +36,10 @@ export function ClientesPage() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null)
+  const [detailChamados, setDetailChamados] = useState<Atendimento[]>([])
+  const [detailPedidos, setDetailPedidos] = useState<PcpPedido[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -43,6 +51,25 @@ export function ClientesPage() {
       toast.error(error instanceof Error ? error.message : 'Falha ao carregar clientes.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function openCliente(cliente: Cliente) {
+    setSelectedCliente(cliente)
+    setDetailChamados([])
+    setDetailPedidos([])
+    setDetailLoading(true)
+    try {
+      const [chamadosResult, pedidosResult] = await Promise.all([
+        api.clienteChamados(getToken, cliente.codigo_cliente),
+        api.pcpPedidosCliente(getToken, cliente.codigo_cliente),
+      ])
+      setDetailChamados(chamadosResult.data)
+      setDetailPedidos(pedidosResult.data)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao carregar detalhes do cliente.')
+    } finally {
+      setDetailLoading(false)
     }
   }
 
@@ -163,7 +190,12 @@ export function ClientesPage() {
           ) : (
             <div className="divide-y divide-gray-100">
               {clientes.map(cliente => (
-                <div key={cliente.codigo_cliente} className="flex items-center gap-4 px-4 py-3">
+                <button
+                  key={cliente.codigo_cliente}
+                  type="button"
+                  onClick={() => openCliente(cliente)}
+                  className="flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-gray-50"
+                >
                   <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gray-100 text-xs font-bold text-gray-500">
                     {cliente.codigo_cliente}
                   </div>
@@ -181,7 +213,7 @@ export function ClientesPage() {
                   <span className="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
                     {cliente.chamados} chamado{cliente.chamados !== 1 ? 's' : ''}
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -209,6 +241,98 @@ export function ClientesPage() {
           </div>
         )}
       </main>
+
+      {selectedCliente && (
+        <div
+          className="fixed inset-0 z-40 grid place-items-center bg-gray-950/30 p-4 backdrop-blur-sm"
+          onMouseDown={() => setSelectedCliente(null)}
+        >
+          <div
+            className="max-h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            onMouseDown={event => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-5">
+              <div>
+                <h2 className="text-lg font-bold text-gray-950">{selectedCliente.nome ?? 'Cliente sem nome'}</h2>
+                <p className="text-xs text-gray-400">Código {selectedCliente.codigo_cliente}</p>
+                {selectedCliente.telefone && (
+                  <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-700">
+                    <Phone size={11} />
+                    {formatPhone(selectedCliente.telefone)}
+                  </p>
+                )}
+              </div>
+              <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={() => setSelectedCliente(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {detailLoading ? (
+              <div className="grid h-40 place-items-center text-gray-400">
+                <LoaderCircle className="animate-spin" size={26} />
+              </div>
+            ) : (
+              <div className="space-y-5 p-5">
+                <section>
+                  <div className="mb-2 flex items-center gap-2">
+                    <MessageCircle size={16} className="text-emerald-600" />
+                    <h3 className="text-sm font-bold text-gray-950">Chamados</h3>
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">{detailChamados.length}</span>
+                  </div>
+                  {detailChamados.length === 0 ? (
+                    <p className="rounded-xl bg-gray-50 px-3 py-6 text-center text-sm text-gray-400">Nenhum chamado para este cliente.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {detailChamados.map(item => {
+                        const tone = getStatusTone(item.status)
+                        return (
+                          <Link
+                            key={item.id}
+                            to={`/chamados?abrir=${item.id}`}
+                            className="block rounded-xl border border-gray-200 p-3 transition-colors hover:border-blue-200 hover:bg-blue-50"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="min-w-0 truncate text-sm font-bold">#{item.numero_pedido || 'sem pedido'}</p>
+                              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${tone.badge}`}>{item.status}</span>
+                            </div>
+                            <p className="mt-1 truncate text-xs text-gray-500">{item.descricao_produto || item.motivo || 'Sem descrição'}</p>
+                            <p className="mt-2 text-[11px] font-medium text-gray-400">{date(item.data_solicitacao)}</p>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
+                </section>
+
+                <section>
+                  <div className="mb-2 flex items-center gap-2">
+                    <Package size={16} className="text-blue-600" />
+                    <h3 className="text-sm font-bold text-gray-950">Pedidos</h3>
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">{detailPedidos.length}</span>
+                  </div>
+                  {detailPedidos.length === 0 ? (
+                    <p className="rounded-xl bg-gray-50 px-3 py-6 text-center text-sm text-gray-400">Nenhum pedido para este cliente.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {detailPedidos.map(pedido => (
+                        <div key={pedido.id} className="rounded-xl border border-gray-200 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="min-w-0 truncate text-sm font-bold">#{pedido.codigo_venda}</p>
+                            {pedido.situacao_erp && (
+                              <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">{pedido.situacao_erp}</span>
+                            )}
+                          </div>
+                          <p className="mt-2 text-[11px] font-medium text-gray-400">{date(pedido.data_pedido)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -217,4 +341,11 @@ function formatPhone(value?: string | null) {
   const phone = String(value || '').replace(/\D/g, '')
   if (phone.length < 10) return phone || '-'
   return `+${phone.slice(0, 2)} ${phone.slice(2, 4)} ${phone.slice(4)}`
+}
+
+function date(value?: string | null) {
+  if (!value) return '-'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '-'
+  return parsed.toLocaleDateString('pt-BR')
 }

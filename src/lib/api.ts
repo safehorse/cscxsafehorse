@@ -120,6 +120,9 @@ export const api = {
   sincronizarClientes: (getToken: () => Promise<string | null>) =>
     request<{ data: { total: number } }>('/api/clientes/sync', getToken, { method: 'POST' }),
 
+  clienteChamados: (getToken: () => Promise<string | null>, codigo: string) =>
+    request<{ data: Atendimento[] }>(`/api/clientes/${encodeURIComponent(codigo)}/chamados`, getToken),
+
   pcpPedidosCliente: (getToken: () => Promise<string | null>, codigoCliente: string) =>
     request<{ data: PcpPedido[] }>(`/api/pcp/clientes/${encodeURIComponent(codigoCliente)}/pedidos`, getToken),
 

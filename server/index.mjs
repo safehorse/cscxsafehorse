@@ -714,7 +714,15 @@ app.get('/api/whatsapp/chats/:chatId/messages', asyncRoute(async (req, res) => {
     [req.params.chatId],
   )
   let saved = contatoRows[0]
-  if (!saved) return res.json({ data: { contato: null, mensagens: [], chamados: [] } })
+  if (!saved) {
+    const telefone = phoneFromWhatsappId(req.params.chatId)
+    if (!telefone) return res.json({ data: { contato: null, mensagens: [], chamados: [] } })
+    saved = await upsertWhatsappContato({
+      whatsappId: req.params.chatId,
+      telefone,
+      nome: stringOrNull(req.query.nome),
+    })
+  }
   if (!saved.codigo_cliente) {
     const matched = await matchClienteByTelefone(saved.telefone)
     if (matched) saved = await linkWhatsappContatoCliente(saved.id, matched.codigo_cliente, matched.nome)
@@ -927,6 +935,11 @@ app.get('/api/clientes', asyncRoute(async (req, res) => {
     pool.query(`select count(*)::int as total from cscx_clientes c ${whereSql}`, countValues),
   ])
   res.json({ data: list.rows, total: total.rows[0]?.total ?? 0, page, pageSize })
+}))
+
+app.get('/api/clientes/:codigo/chamados', asyncRoute(async (req, res) => {
+  const chamados = await findAtendimentosByCodigoCliente(req.params.codigo)
+  res.json({ data: chamados })
 }))
 
 function normalizePedidoCodigo(value) {
