@@ -273,6 +273,13 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
     }
   }
 
+  async function syncPedidoFromPcp() {
+    if (!selected?.numero_pedido) return null
+    const { data } = await api.pcpPedidoSync(getToken, selected.numero_pedido)
+    if (!data) toast.warning('Pedido não encontrado no ERP.')
+    return data
+  }
+
   const agenda = useMemo(() => {
     const rows = dashboard?.proximos ?? []
     return rows.filter(item => item.agendado_para).slice(0, 7)
@@ -593,6 +600,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
           onSaveReembolso={saveReembolso}
           onAddNote={addNote}
           onLoadPedido={loadPedidoFromPcp}
+          onSyncPedido={syncPedidoFromPcp}
           onReabrir={reabrirChamado}
         />
       )}
@@ -617,7 +625,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
   )
 }
 
-export function DetailDrawer({ selected, loading, note, setNote, getToken, cadastros, onCadastroChanged, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido, onReabrir }: {
+export function DetailDrawer({ selected, loading, note, setNote, getToken, cadastros, onCadastroChanged, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido, onSyncPedido, onReabrir }: {
   selected: Atendimento
   loading: boolean
   note: string
@@ -631,6 +639,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   onSaveReembolso: (valor: number | null, motivo: string) => Promise<void>
   onAddNote: (produtoId?: string | null, produtoDescricao?: string | null) => void
   onLoadPedido: () => Promise<PcpPedido | null>
+  onSyncPedido: () => Promise<PcpPedido | null>
   onReabrir: (motivo: string, produtoId: string, produtoDescricao: string | null) => Promise<void>
 }) {
   const [closing, setClosing] = useState(false)
@@ -643,6 +652,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   const [showPedido, setShowPedido] = useState(false)
   const [pedido, setPedido] = useState<PcpPedido | null>(null)
   const [loadingPedido, setLoadingPedido] = useState(false)
+  const [syncingPedido, setSyncingPedido] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState<WizardForm>(() => atendimentoToForm(selected))
   const [savingEdit, setSavingEdit] = useState(false)
@@ -712,6 +722,19 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   async function viewPedido() {
     setShowPedido(true)
     await ensurePedidoLoaded()
+  }
+
+  async function syncPedidoFromErp() {
+    setSyncingPedido(true)
+    try {
+      const result = await onSyncPedido()
+      setPedido(result)
+      if (result) toast.success('Pedido sincronizado do ERP.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao sincronizar pedido.')
+    } finally {
+      setSyncingPedido(false)
+    }
   }
 
   async function toggleReabrir() {
@@ -950,7 +973,18 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                     </div>
                   </div>
                 ) : (
-                  <p className="py-4 text-sm text-blue-800">Pedido não encontrado no PCP.</p>
+                  <div className="space-y-2 py-2">
+                    <p className="text-sm text-blue-800">Pedido não encontrado no PCP.</p>
+                    <button
+                      type="button"
+                      onClick={syncPedidoFromErp}
+                      disabled={syncingPedido}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-40"
+                    >
+                      {syncingPedido ? <LoaderCircle size={13} className="animate-spin" /> : <PackageSearch size={13} />}
+                      Buscar do ERP
+                    </button>
+                  </div>
                 )}
               </section>
             )}
@@ -1185,6 +1219,8 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   const [loadingPedido, setLoadingPedido] = useState(false)
   const [saving, setSaving] = useState(false)
   const [existingChamado, setExistingChamado] = useState<{ id: string; status: string } | null>(null)
+  const [notFoundCodigo, setNotFoundCodigo] = useState('')
+  const [syncingPedido, setSyncingPedido] = useState(false)
 
   async function checkExistingChamado(numeroPedido: string) {
     try {
@@ -1253,10 +1289,12 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
     const codigo = (codigoOverride ?? codigoBusca).trim()
     if (!codigo) return
     setLoadingPedido(true)
+    setNotFoundCodigo('')
     try {
       const { data } = await api.pcpPedido(getToken, codigo)
       if (!data) {
         toast.warning('Pedido não encontrado no PCP.')
+        setNotFoundCodigo(codigo)
         return
       }
       applyPedido(data)
@@ -1264,6 +1302,25 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
       toast.error(error instanceof Error ? error.message : 'Falha ao buscar pedido.')
     } finally {
       setLoadingPedido(false)
+    }
+  }
+
+  async function syncBuscarPedido() {
+    if (!notFoundCodigo) return
+    setSyncingPedido(true)
+    try {
+      const { data } = await api.pcpPedidoSync(getToken, notFoundCodigo)
+      if (!data) {
+        toast.warning('Pedido não encontrado no ERP.')
+        return
+      }
+      toast.success('Pedido sincronizado do ERP.')
+      setNotFoundCodigo('')
+      applyPedido(data)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao sincronizar pedido.')
+    } finally {
+      setSyncingPedido(false)
     }
   }
 
@@ -1428,7 +1485,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
                     <PackageSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       value={codigoBusca}
-                      onChange={event => setCodigoBusca(event.target.value)}
+                      onChange={event => { setCodigoBusca(event.target.value); setNotFoundCodigo('') }}
                       onKeyDown={event => { if (event.key === 'Enter') buscarPedido() }}
                       placeholder="Numero do pedido"
                       className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
@@ -1443,6 +1500,17 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
                     {loadingPedido ? <LoaderCircle size={16} className="animate-spin" /> : <Search size={16} />}
                     Buscar
                   </button>
+                  {notFoundCodigo && (
+                    <button
+                      type="button"
+                      onClick={syncBuscarPedido}
+                      disabled={syncingPedido}
+                      className="inline-flex h-11 items-center gap-2 rounded-xl border border-blue-300 bg-blue-50 px-4 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+                    >
+                      {syncingPedido ? <LoaderCircle size={16} className="animate-spin" /> : <PackageSearch size={16} />}
+                      Buscar do ERP
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">

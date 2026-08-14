@@ -121,6 +121,9 @@ export const api = {
   pcpPedido: (getToken: () => Promise<string | null>, codigo: string) =>
     request<{ data: PcpPedido | null }>(`/api/pcp/pedidos/${encodeURIComponent(codigo)}`, getToken),
 
+  pcpPedidoSync: (getToken: () => Promise<string | null>, codigo: string) =>
+    request<{ data: PcpPedido | null }>(`/api/pcp/pedidos/${encodeURIComponent(codigo)}/sync`, getToken, { method: 'POST' }),
+
   clientes: (getToken: () => Promise<string | null>, filters: { search?: string; page?: number; pageSize?: number } = {}) => {
     const qs = new URLSearchParams()
     if (filters.search) qs.set('search', filters.search)

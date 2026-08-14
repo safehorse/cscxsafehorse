@@ -200,6 +200,13 @@ export function KanbanPage() {
     }
   }
 
+  async function syncPedidoFromPcp() {
+    if (!selected?.numero_pedido) return null
+    const { data } = await api.pcpPedidoSync(getToken, selected.numero_pedido)
+    if (!data) toast.warning('Pedido não encontrado no ERP.')
+    return data
+  }
+
   function persistOrder(nextOrder: string[]) {
     setColumnOrder(nextOrder)
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextOrder))
@@ -508,6 +515,7 @@ export function KanbanPage() {
           onSaveReembolso={saveReembolso}
           onAddNote={addNote}
           onLoadPedido={loadPedidoFromPcp}
+          onSyncPedido={syncPedidoFromPcp}
           onReabrir={reabrirChamado}
         />
       )}

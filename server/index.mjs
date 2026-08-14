@@ -14,6 +14,8 @@ const CLERK_JWT_ISSUER = process.env.CLERK_JWT_ISSUER || ''
 const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY || ''
 const PCP_API_URL = (process.env.PCP_API_URL || '').replace(/\/$/, '')
 const PCP_API_KEY = process.env.PCP_API_KEY || ''
+const PCP_FUNCTIONS_URL = (process.env.PCP_FUNCTIONS_URL || '').replace(/\/$/, '')
+const PCP_FUNCTIONS_WEBHOOK_SECRET = process.env.PCP_FUNCTIONS_WEBHOOK_SECRET || ''
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173'
 const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || CORS_ORIGIN.split(',')[0] || 'https://cscx.safehorse.com.br').replace(/\/$/, '')
 
@@ -894,6 +896,46 @@ app.get('/api/pcp/produtos', asyncRoute(async (req, res) => {
 app.get('/api/pcp/pedidos/:codigo', asyncRoute(async (req, res) => {
   if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
   const codigo = encodeURIComponent(normalizePedidoCodigo(req.params.codigo))
+  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,vendedor:vendedor_id(nome),last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
+  const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?codigo_venda=eq.${codigo}&select=${select}`, {
+    headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) return res.status(response.status).json({ error: data?.message || 'Falha ao consultar PCP.' })
+  const pedido = Array.isArray(data) ? data[0] || null : data
+  if (!pedido) return res.json({ data: null })
+  const normalized = normalizePcpPedido(pedido)
+  await hydrateItemValuesFromHistory(normalized)
+  res.json({ data: normalized })
+}))
+
+// Quando o pedido ainda não foi sincronizado pro PCP (webhook do ERP não
+// chegou ainda, ou nunca chegou pra esse pedido específico), busca direto
+// do Firebird sob demanda via o serviço pcpsafehorse-functions, que roda
+// na mesma VPS - por isso a chamada é local (127.0.0.1), sem exposição
+// pública. Depois de sincronizar, reconsulta o PCP e devolve o pedido.
+app.post('/api/pcp/pedidos/:codigo/sync', asyncRoute(async (req, res) => {
+  if (!PCP_FUNCTIONS_URL || !PCP_FUNCTIONS_WEBHOOK_SECRET) {
+    return res.status(500).json({ error: 'Sincronização com o ERP não configurada.' })
+  }
+  const numero = normalizePedidoCodigo(req.params.codigo)
+  if (!numero) return res.status(400).json({ error: 'Número do pedido inválido.' })
+
+  const syncResponse = await fetch(`${PCP_FUNCTIONS_URL}/functions/v1/sync-pedido-firebird`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-webhook-secret': PCP_FUNCTIONS_WEBHOOK_SECRET },
+    body: JSON.stringify({ numero_pedido: numero }),
+  })
+  const syncData = await syncResponse.json().catch(() => null)
+  if (!syncResponse.ok) {
+    const message = syncResponse.status === 404
+      ? 'Pedido não encontrado no ERP.'
+      : syncData?.error || 'Falha ao sincronizar pedido com o ERP.'
+    return res.status(syncResponse.status === 404 ? 404 : 502).json({ error: message })
+  }
+
+  if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
+  const codigo = encodeURIComponent(numero)
   const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,vendedor:vendedor_id(nome),last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
   const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?codigo_venda=eq.${codigo}&select=${select}`, {
     headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
