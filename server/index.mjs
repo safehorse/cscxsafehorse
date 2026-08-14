@@ -834,7 +834,7 @@ app.get('/api/pcp/produtos', asyncRoute(async (req, res) => {
 app.get('/api/pcp/pedidos/:codigo', asyncRoute(async (req, res) => {
   if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
   const codigo = encodeURIComponent(normalizePedidoCodigo(req.params.codigo))
-  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
+  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,vendedor:vendedor_id(nome),last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
   const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?codigo_venda=eq.${codigo}&select=${select}`, {
     headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
   })
@@ -851,7 +851,7 @@ app.get('/api/pcp/clientes/:codigoCliente/pedidos', asyncRoute(async (req, res) 
   if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
   const codigo = encodeURIComponent(String(req.params.codigoCliente || '').trim())
   if (!codigo) return res.json({ data: [] })
-  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
+  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,vendedor:vendedor_id(nome),last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
   const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?codigo_cliente=eq.${codigo}&select=${select}&order=data_pedido.desc&limit=20`, {
     headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
   })
@@ -1238,13 +1238,18 @@ function normalizePcpPedido(row) {
   const vendedorPayload = body.vendedor ?? {}
   const itens = Array.isArray(row.pedido_itens) ? row.pedido_itens : []
   const pedidoValorTotal = toNumberOrNull(pedidoPayload.valor_total)
+  const vendedorRow = Array.isArray(row.vendedor) ? row.vendedor[0] : row.vendedor
 
   return {
     id: row.id,
     codigo_venda: normalizePedidoCodigo(row.codigo_venda),
     codigo_cliente: identifierOrNull(row.codigo_cliente ?? clientePayload.codigo),
     nome_cliente: stringOrNull(row.nome_cliente ?? clientePayload.nome),
-    vendedor: stringOrNull(vendedorPayload.nome),
+    // vendedor_id é a fonte estável (join pra vendedores.nome) - o webhook
+    // "pedido_alterado" às vezes sobrescreve last_webhook_payload com um
+    // corpo mais enxuto que não tem vendedor, então o payload só entra como
+    // fallback quando o pedido nunca teve vendedor_id vinculado.
+    vendedor: stringOrNull(vendedorRow?.nome ?? vendedorPayload.nome),
     data_pedido: row.data_pedido ?? null,
     data_entrega: row.data_entrega ?? null,
     data_faturamento: row.data_faturamento ?? null,

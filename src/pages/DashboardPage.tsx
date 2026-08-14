@@ -1620,7 +1620,6 @@ export function PedidoResumo({ pedido, compact = false }: { pedido: PcpPedido; c
         <Info label="Vendedor" value={pedido.vendedor} />
         <Info label="Total pedido" value={money(pedido.valor_total)} />
         <Info label="Data do pedido" value={date(pedido.data_pedido)} />
-        <Info label="Previsão de entrega" value={date(pedido.data_entrega)} />
       </div>
       {pedido.itens.length > 0 && (
         <div className="mt-3 space-y-1.5">
