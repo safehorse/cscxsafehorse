@@ -249,7 +249,10 @@ export function WhatsappPage() {
             ) : (
               <div className="grid h-72 place-items-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 text-center text-sm text-gray-500">
                 {loadingStatus || status.status === 'iniciando' || status.status === 'autenticado' ? (
-                  <LoaderCircle className="animate-spin text-emerald-600" size={30} />
+                  <div className="flex flex-col items-center gap-3">
+                    <LoaderCircle className="animate-spin text-emerald-600" size={30} />
+                    <p className="font-medium text-gray-500">{statusLabel(status)}</p>
+                  </div>
                 ) : (
                   <MessageCircle className="text-gray-300" size={42} />
                 )}
@@ -269,8 +272,17 @@ export function WhatsappPage() {
                 disabled={loadingStatus || status.status === 'iniciando'}
                 className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
               >
-                {loadingStatus ? <LoaderCircle className="animate-spin" size={16} /> : <MessageCircle size={16} />}
-                Conectar
+                {loadingStatus || status.status === 'iniciando' ? (
+                  <>
+                    <LoaderCircle className="animate-spin" size={16} />
+                    Conectando...
+                  </>
+                ) : (
+                  <>
+                    <MessageCircle size={16} />
+                    Conectar
+                  </>
+                )}
               </button>
               <button
                 type="button"
