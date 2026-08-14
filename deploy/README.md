@@ -13,8 +13,9 @@ Nao copie a chave privada para o repositorio.
 ## Layout sugerido na VPS
 
 ```text
-/var/www/cscxsafehorse
-  dist/
+/opt/cscxsafehorse
+  current -> releases/<commit>
+  releases/
   server/
   database/
   package.json
@@ -26,5 +27,5 @@ Nao copie a chave privada para o repositorio.
 
 - Nginx: `deploy/nginx-cscx.safehorse.com.br.conf`
 - Systemd: `deploy/cscxsafehorse.service`
-- API local: `127.0.0.1:3001`
+- API local: `127.0.0.1:3010`
 - Banco: PostgreSQL na propria VPS ou em host acessivel pela VPS via `DATABASE_URL`

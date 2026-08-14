@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/var/www/cscxsafehorse
-EnvironmentFile=/var/www/cscxsafehorse/.env
+WorkingDirectory=/opt/cscxsafehorse
+EnvironmentFile=/opt/cscxsafehorse/.env
 ExecStart=/usr/bin/node server/index.mjs
 Restart=always
 RestartSec=5
