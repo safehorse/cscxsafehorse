@@ -525,7 +525,7 @@ app.post('/api/agendamentos', asyncRoute(async (req, res) => {
 
 app.get('/api/pcp/pedidos/:codigo', asyncRoute(async (req, res) => {
   if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
-  const codigo = encodeURIComponent(req.params.codigo)
+  const codigo = encodeURIComponent(normalizePedidoCodigo(req.params.codigo))
   const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
   const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?codigo_venda=eq.${codigo}&select=${select}`, {
     headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
@@ -538,6 +538,10 @@ app.get('/api/pcp/pedidos/:codigo', asyncRoute(async (req, res) => {
   await hydrateItemValuesFromHistory(normalized)
   res.json({ data: normalized })
 }))
+
+function normalizePedidoCodigo(value) {
+  return String(value || '').trim().replace(/\.0+$/, '')
+}
 
 app.post('/api/import/planilha', asyncRoute(async (req, res) => {
   const rows = Array.isArray(req.body.rows) ? req.body.rows : []
