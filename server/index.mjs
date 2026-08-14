@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import fs from 'node:fs/promises'
 import express from 'express'
 import cors from 'cors'
 import pg from 'pg'
@@ -992,6 +993,7 @@ let whatsappState = {
   status: 'desconectado',
   qr: null,
   erro: null,
+  startedAt: null,
   connectedAt: null,
   updatedAt: new Date().toISOString(),
 }
@@ -1011,9 +1013,13 @@ function getWhatsappStatus() {
 }
 
 async function ensureWhatsappClient() {
+  if (whatsappClient && whatsappState.status === 'iniciando' && whatsappState.startedAt) {
+    const elapsed = Date.now() - new Date(whatsappState.startedAt).getTime()
+    if (elapsed > 60_000) await disconnectWhatsapp({ clearSession: true })
+  }
   if (whatsappClient) return whatsappClient
 
-  setWhatsappState({ status: 'iniciando', erro: null })
+  setWhatsappState({ status: 'iniciando', erro: null, startedAt: new Date().toISOString() })
   whatsappClient = new WhatsappClient({
     authStrategy: new LocalAuth({
       clientId: 'cscx-safehorse',
@@ -1083,14 +1089,28 @@ function getReadyWhatsappClient() {
 }
 
 async function disconnectWhatsapp() {
+  return resetWhatsappClient({ clearSession: true })
+}
+
+async function resetWhatsappClient({ clearSession = false } = {}) {
   if (!whatsappClient) {
-    setWhatsappState({ status: 'desconectado', qr: null, erro: null, connectedAt: null })
+    if (clearSession) await clearWhatsappSession()
+    setWhatsappState({ status: 'desconectado', qr: null, erro: null, startedAt: null, connectedAt: null })
     return
   }
   const client = whatsappClient
   whatsappClient = null
-  await client.destroy().catch(() => null)
-  setWhatsappState({ status: 'desconectado', qr: null, erro: null, connectedAt: null })
+  await Promise.race([
+    client.destroy().catch(() => null),
+    new Promise(resolve => setTimeout(resolve, 4000)),
+  ])
+  if (clearSession) await clearWhatsappSession()
+  setWhatsappState({ status: 'desconectado', qr: null, erro: null, startedAt: null, connectedAt: null })
+}
+
+async function clearWhatsappSession() {
+  await fs.rm(`${WHATSAPP_SESSION_PATH}/session-cscx-safehorse`, { recursive: true, force: true }).catch(() => null)
+  await fs.mkdir(WHATSAPP_SESSION_PATH, { recursive: true }).catch(() => null)
 }
 
 function phoneFromWhatsappId(value) {
