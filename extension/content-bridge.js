@@ -7,6 +7,10 @@
 //    da própria página do WhatsApp Web, pra não precisar trocar de aba.
 const API_BASE = 'https://cscx.safehorse.com.br'
 
+let panelEl = null
+let toggleEl = null
+let state = { chatId: null, nome: null, contato: null, chamados: [], pedidos: [], codigoCliente: '', clienteNome: '', sugestoes: [], saving: false }
+
 window.addEventListener('message', event => {
   if (event.source !== window) return
   const data = event.data
@@ -92,10 +96,6 @@ const STYLE = `
 .cscx-tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--cscx-accent-bg); color: var(--cscx-accent); white-space: nowrap; }
 .cscx-card-sub { color: var(--cscx-text-soft); font-size: 11px; margin-top: 3px; }
 `
-
-let panelEl = null
-let toggleEl = null
-let state = { chatId: null, nome: null, contato: null, chamados: [], pedidos: [], codigoCliente: '', clienteNome: '', sugestoes: [], saving: false }
 
 function ensurePanel() {
   if (panelEl) return
