@@ -15,6 +15,20 @@ window.addEventListener('message', event => {
   if (data.type === 'active-chat') onActiveChat(data.payload)
 })
 
+// Mostra o painel (e o botão de abrir/fechar) assim que a página carrega,
+// sem depender de detectar uma conversa ativa primeiro - assim o botão
+// sempre aparece, mesmo se a detecção de conversa ativa falhar.
+function boot() {
+  try {
+    ensurePanel()
+    console.log('CSCX WhatsApp Bridge: painel carregado.')
+  } catch (error) {
+    console.error('CSCX WhatsApp Bridge: falha ao criar o painel', error)
+  }
+}
+if (document.body) boot()
+else document.addEventListener('DOMContentLoaded', boot)
+
 async function getToken() {
   const { whatsappToken } = await chrome.storage.local.get('whatsappToken')
   return whatsappToken || null
