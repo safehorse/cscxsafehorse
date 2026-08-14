@@ -713,8 +713,12 @@ app.get('/api/whatsapp/chats/:chatId/messages', asyncRoute(async (req, res) => {
     'select * from cscx_whatsapp_contatos where whatsapp_id = $1',
     [req.params.chatId],
   )
-  const saved = contatoRows[0]
+  let saved = contatoRows[0]
   if (!saved) return res.json({ data: { contato: null, mensagens: [], chamados: [] } })
+  if (!saved.codigo_cliente) {
+    const matched = await matchClienteByTelefone(saved.telefone)
+    if (matched) saved = await linkWhatsappContatoCliente(saved.id, matched.codigo_cliente, matched.nome)
+  }
   const { rows: mensagens } = await pool.query(
     'select * from cscx_whatsapp_mensagens where contato_id = $1 order by enviado_em desc limit $2',
     [saved.id, limit],
