@@ -4,6 +4,17 @@ const API_URL = (import.meta.env.VITE_CSCX_API_URL as string || '').replace(/\/$
 
 export class ApiError extends Error {}
 
+export interface AtendimentoFilters {
+  search?: string
+  status?: string
+  responsavel?: string
+  dateFrom?: string
+  dateTo?: string
+  year?: string
+  page?: number
+  pageSize?: number
+}
+
 async function request<T>(path: string, getToken: () => Promise<string | null>, init?: RequestInit): Promise<T> {
   const token = await getToken()
   const response = await fetch(`${API_URL}${path}`, {
@@ -20,8 +31,10 @@ async function request<T>(path: string, getToken: () => Promise<string | null>, 
 }
 
 export const api = {
-  dashboard: (getToken: () => Promise<string | null>) =>
-    request<DashboardData>('/api/dashboard', getToken),
+  dashboard: (getToken: () => Promise<string | null>, filters: AtendimentoFilters = {}) => {
+    const qs = buildAtendimentoQuery(filters)
+    return request<DashboardData>(`/api/dashboard?${qs.toString()}`, getToken)
+  },
 
   agenda: (getToken: () => Promise<string | null>, filters: { from?: string; to?: string }) => {
     const qs = new URLSearchParams()
@@ -45,13 +58,8 @@ export const api = {
   inviteUsuario: (getToken: () => Promise<string | null>, id: string) =>
     request<{ data: Usuario; convite: { id: string | null; status: string; email: string } }>(`/api/usuarios/${id}/convite`, getToken, { method: 'POST' }),
 
-  atendimentos: (getToken: () => Promise<string | null>, filters: { search?: string; status?: string; responsavel?: string; page?: number; pageSize?: number }) => {
-    const qs = new URLSearchParams()
-    if (filters.search) qs.set('search', filters.search)
-    if (filters.status) qs.set('status', filters.status)
-    if (filters.responsavel) qs.set('responsavel', filters.responsavel)
-    if (filters.page) qs.set('page', String(filters.page))
-    if (filters.pageSize) qs.set('pageSize', String(filters.pageSize))
+  atendimentos: (getToken: () => Promise<string | null>, filters: AtendimentoFilters) => {
+    const qs = buildAtendimentoQuery(filters)
     return request<{ data: Atendimento[]; total: number; page: number; pageSize: number }>(`/api/atendimentos?${qs.toString()}`, getToken)
   },
 
@@ -78,4 +86,17 @@ export const api = {
 
   pcpPedido: (getToken: () => Promise<string | null>, codigo: string) =>
     request<{ data: PcpPedido | null }>(`/api/pcp/pedidos/${encodeURIComponent(codigo)}`, getToken),
+}
+
+function buildAtendimentoQuery(filters: AtendimentoFilters) {
+  const qs = new URLSearchParams()
+  if (filters.search) qs.set('search', filters.search)
+  if (filters.status) qs.set('status', filters.status)
+  if (filters.responsavel) qs.set('responsavel', filters.responsavel)
+  if (filters.dateFrom) qs.set('dateFrom', filters.dateFrom)
+  if (filters.dateTo) qs.set('dateTo', filters.dateTo)
+  if (filters.year) qs.set('year', filters.year)
+  if (filters.page) qs.set('page', String(filters.page))
+  if (filters.pageSize) qs.set('pageSize', String(filters.pageSize))
+  return qs
 }

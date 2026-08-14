@@ -26,7 +26,7 @@ import {
 import { toast } from 'sonner'
 import logoSrc from '../assets/logo.png'
 import { DateTimePicker } from '../components/DateTimePicker'
-import { api } from '../lib/api'
+import { api, type AtendimentoFilters } from '../lib/api'
 import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, PcpPedidoItem } from '../lib/types'
 
 const STATUS_OPTIONS = ['ABERTO', 'AGUARDANDO DEVOLUÇÃO', 'FINALIZADO', 'EM ANÁLISE', 'EM PRODUÇÃO', 'CRÉDITO GERADO', 'TROCA GERADA']
@@ -71,17 +71,33 @@ export function DashboardPage() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [responsavel, setResponsavel] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [year, setYear] = useState('')
   const [page, setPage] = useState(1)
   const [totalAtendimentos, setTotalAtendimentos] = useState(0)
   const [showCreate, setShowCreate] = useState(false)
   const [note, setNote] = useState('')
+  const filterParams = useMemo<AtendimentoFilters>(() => ({
+    search,
+    status,
+    responsavel,
+    dateFrom,
+    dateTo,
+    year,
+  }), [search, status, responsavel, dateFrom, dateTo, year])
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear()
+    return Array.from({ length: 7 }, (_, index) => String(currentYear - index))
+  }, [])
+  const hasFilters = Boolean(search || status || responsavel || dateFrom || dateTo || year)
 
   async function load() {
     setLoading(true)
     try {
       const [dash, list, options] = await Promise.all([
-        api.dashboard(getToken),
-        api.atendimentos(getToken, { search, status, responsavel, page, pageSize: PAGE_SIZE }),
+        api.dashboard(getToken, filterParams),
+        api.atendimentos(getToken, { ...filterParams, page, pageSize: PAGE_SIZE }),
         api.cadastros(getToken),
       ])
       setDashboard(dash)
@@ -98,7 +114,7 @@ export function DashboardPage() {
   useEffect(() => {
     const timeout = window.setTimeout(load, 250)
     return () => window.clearTimeout(timeout)
-  }, [search, status, responsavel, page])
+  }, [filterParams, page])
 
   useEffect(() => {
     const email = user?.primaryEmailAddress?.emailAddress
@@ -109,6 +125,16 @@ export function DashboardPage() {
   }, [user?.id])
 
   const totalPages = Math.max(1, Math.ceil(totalAtendimentos / PAGE_SIZE))
+
+  function clearFilters() {
+    setSearch('')
+    setStatus('')
+    setResponsavel('')
+    setDateFrom('')
+    setDateTo('')
+    setYear('')
+    setPage(1)
+  }
 
   async function reloadCadastros() {
     try {
@@ -283,6 +309,52 @@ export function DashboardPage() {
                   Novo
                 </button>
               </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_140px_auto]">
+                <label className="min-w-0">
+                  <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                    <CalendarDays size={13} className="text-gray-400" />
+                    Data inicial
+                  </span>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={event => { setDateFrom(event.target.value); setPage(1) }}
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="min-w-0">
+                  <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                    <CalendarDays size={13} className="text-gray-400" />
+                    Data final
+                  </span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={event => { setDateTo(event.target.value); setPage(1) }}
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="min-w-0">
+                  <span className="mb-1 block text-xs font-medium text-gray-500">Ano</span>
+                  <select
+                    value={year}
+                    onChange={event => { setYear(event.target.value); setPage(1) }}
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-600 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">Todos</option>
+                    {yearOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  disabled={!hasFilters}
+                  className="mt-auto inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40"
+                >
+                  <X size={15} />
+                  Limpar
+                </button>
+              </div>
             </div>
 
             {loading ? (
@@ -400,14 +472,7 @@ export function DashboardPage() {
               <CheckCircle2 size={16} className="text-emerald-500" />
               <h2 className="text-sm font-semibold text-gray-950">Status</h2>
             </div>
-            <div className="space-y-2">
-              {(dashboard?.status ?? []).map(row => (
-                <div key={row.status} className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2 text-sm">
-                  <span className="truncate text-gray-600">{row.status}</span>
-                  <strong className="text-gray-950">{row.total}</strong>
-                </div>
-              ))}
-            </div>
+            <StatusChart rows={dashboard?.status ?? []} loading={loading} />
           </div>
         </aside>
       </main>
@@ -1008,6 +1073,43 @@ function Metric({ label, value, loading, tone = 'gray' }: { label: string; value
       ) : (
         <p className={`mt-3 inline-flex rounded-xl px-3 py-1.5 text-2xl font-bold ${classes[tone]}`}>{value}</p>
       )}
+    </div>
+  )
+}
+
+function StatusChart({ rows, loading }: { rows: DashboardData['status']; loading: boolean }) {
+  const max = Math.max(1, ...rows.map(row => row.total))
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[0, 1, 2, 3].map(item => (
+          <div key={item} className="h-12 animate-pulse rounded-xl bg-gray-100" />
+        ))}
+      </div>
+    )
+  }
+
+  if (!rows.length) {
+    return <p className="py-6 text-center text-sm text-gray-400">Sem status neste filtro.</p>
+  }
+
+  return (
+    <div className="space-y-3">
+      {rows.map(row => {
+        const percent = Math.max(6, Math.round((row.total / max) * 100))
+        return (
+          <div key={row.status} className="rounded-xl bg-gray-50 px-3 py-2">
+            <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+              <span className="min-w-0 truncate text-gray-600">{row.status}</span>
+              <strong className="shrink-0 text-gray-950">{row.total}</strong>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white">
+              <div className="h-full rounded-full bg-blue-500 transition-all duration-500" style={{ width: `${percent}%` }} />
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

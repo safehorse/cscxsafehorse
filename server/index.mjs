@@ -72,6 +72,49 @@ function toDateOrNull(value) {
   return null
 }
 
+function buildAtendimentoFilters(query) {
+  const search = String(query.search || '').trim()
+  const status = String(query.status || '').trim()
+  const responsavel = String(query.responsavel || '').trim()
+  const dateFrom = toDateOrNull(query.dateFrom || query.dataInicio)
+  const dateTo = toDateOrNull(query.dateTo || query.dataFim)
+  const year = Number(query.year || query.ano)
+  const values = []
+  const where = []
+
+  if (search) {
+    values.push(`%${search}%`)
+    where.push(`(numero_pedido ilike $${values.length} or cliente ilike $${values.length} or codigo_produto ilike $${values.length} or descricao_produto ilike $${values.length})`)
+  }
+
+  if (status) {
+    values.push(status)
+    where.push(`status = $${values.length}`)
+  }
+
+  if (responsavel) {
+    values.push(`%${responsavel}%`)
+    where.push(`responsavel ilike $${values.length}`)
+  }
+
+  if (dateFrom) {
+    values.push(dateFrom)
+    where.push(`data_solicitacao >= $${values.length}::date`)
+  }
+
+  if (dateTo) {
+    values.push(dateTo)
+    where.push(`data_solicitacao < ($${values.length}::date + interval '1 day')`)
+  }
+
+  if (Number.isInteger(year) && year >= 2000 && year <= 2100) {
+    values.push(year)
+    where.push(`extract(year from data_solicitacao)::int = $${values.length}`)
+  }
+
+  return { values, where }
+}
+
 function getUserId(req) {
   return req.auth?.sub || req.auth?.userId || 'service'
 }
@@ -105,7 +148,10 @@ app.get('/api/health', asyncRoute(async (_req, res) => {
 
 app.use('/api', requireAuth)
 
-app.get('/api/dashboard', asyncRoute(async (_req, res) => {
+app.get('/api/dashboard', asyncRoute(async (req, res) => {
+  const filters = buildAtendimentoFilters(req.query)
+  const whereSql = filters.where.length ? `where ${filters.where.join(' and ')}` : ''
+
   const [totais, proximos, statusRows] = await Promise.all([
     pool.query(`
       select
@@ -118,20 +164,22 @@ app.get('/api/dashboard', asyncRoute(async (_req, res) => {
         coalesce(sum(reembolso_valor), 0)::numeric as valor_reembolso,
         coalesce(sum(valor_total), 0)::numeric as valor_total
       from cscx_atendimentos
-    `),
+      ${whereSql}
+    `, filters.values),
     pool.query(`
       select id, numero_pedido, cliente, status, responsavel, agendado_para, proxima_acao
       from cscx_atendimentos
-      where agendado_para is not null
+      where agendado_para is not null${filters.where.length ? ` and ${filters.where.join(' and ')}` : ''}
       order by agendado_para asc
       limit 8
-    `),
+    `, filters.values),
     pool.query(`
       select status, count(*)::int as total
       from cscx_atendimentos
+      ${whereSql}
       group by status
       order by total desc, status asc
-    `),
+    `, filters.values),
   ])
 
   res.json({
@@ -354,34 +402,17 @@ app.post('/api/cadastros/responsaveis', asyncRoute(async (req, res) => {
 }))
 
 app.get('/api/atendimentos', asyncRoute(async (req, res) => {
-  const search = String(req.query.search || '').trim()
-  const status = String(req.query.status || '').trim()
-  const responsavel = String(req.query.responsavel || '').trim()
   const requestedPage = Number(req.query.page || 1)
   const requestedPageSize = Number(req.query.pageSize || 20)
   const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1
   const pageSize = Number.isFinite(requestedPageSize) ? Math.min(Math.max(requestedPageSize, 5), 100) : 20
   const offset = (page - 1) * pageSize
+  const filters = buildAtendimentoFilters(req.query)
+  const values = [...filters.values]
 
-  const where = []
-  const values = []
-
-  if (search) {
-    values.push(`%${search}%`)
-    where.push(`(numero_pedido ilike $${values.length} or cliente ilike $${values.length} or codigo_produto ilike $${values.length} or descricao_produto ilike $${values.length})`)
-  }
-  if (status) {
-    values.push(status)
-    where.push(`status = $${values.length}`)
-  }
-  if (responsavel) {
-    values.push(`%${responsavel}%`)
-    where.push(`responsavel ilike $${values.length}`)
-  }
-
-  const whereSql = where.length ? `where ${where.join(' and ')}` : ''
+  const whereSql = filters.where.length ? `where ${filters.where.join(' and ')}` : ''
   const countSql = `select count(*)::int as total from cscx_atendimentos ${whereSql}`
-  const countValues = [...values]
+  const countValues = [...filters.values]
 
   values.push(pageSize)
   values.push(offset)
