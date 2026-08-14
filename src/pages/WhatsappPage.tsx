@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
   CheckCircle2,
+  Grid3X3,
   LoaderCircle,
   LogOut,
   MessageCircle,
@@ -200,6 +201,13 @@ export function WhatsappPage() {
           >
             <ArrowLeft size={15} />
             Voltar
+          </Link>
+          <Link
+            to="/kanban"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-violet-300/30 bg-violet-400/10 px-3 text-sm font-semibold text-violet-100 transition-colors hover:bg-violet-400/20"
+          >
+            <Grid3X3 size={15} />
+            Kanban
           </Link>
           <button
             type="button"

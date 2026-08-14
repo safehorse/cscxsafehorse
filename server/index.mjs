@@ -490,6 +490,19 @@ app.get('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   res.json({ data: { ...atendimento.rows[0], interacoes: interacoes.rows, agenda: agenda.rows } })
 }))
 
+app.get('/api/kanban/atendimentos', asyncRoute(async (req, res) => {
+  const filters = buildAtendimentoFilters(req.query)
+  const whereSql = filters.where.length ? `where ${filters.where.join(' and ')}` : ''
+  const { rows } = await pool.query(`
+    select *
+    from cscx_atendimentos
+    ${whereSql}
+    order by coalesce(agendado_para, updated_at, created_at) desc
+    limit 500
+  `, filters.values)
+  res.json({ data: rows })
+}))
+
 app.post('/api/atendimentos', asyncRoute(async (req, res) => {
   const row = atendimentoFromBody(req.body)
   const inserted = await upsertAtendimento(row, getUserId(req))

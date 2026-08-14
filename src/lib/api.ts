@@ -80,6 +80,11 @@ export const api = {
   atendimento: (getToken: () => Promise<string | null>, id: string) =>
     request<{ data: Atendimento }>(`/api/atendimentos/${id}`, getToken),
 
+  kanbanAtendimentos: (getToken: () => Promise<string | null>, filters: AtendimentoFilters = {}) => {
+    const qs = buildAtendimentoQuery(filters)
+    return request<{ data: Atendimento[] }>(`/api/kanban/atendimentos?${qs.toString()}`, getToken)
+  },
+
   createAtendimento: (getToken: () => Promise<string | null>, body: Partial<Atendimento>) =>
     request<{ data: Atendimento }>('/api/atendimentos', getToken, { method: 'POST', body: JSON.stringify(body) }),
 

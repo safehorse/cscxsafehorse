@@ -139,6 +139,13 @@ export function AgendaPage() {
             <MessageCircle size={15} />
             WhatsApp
           </Link>
+          <Link
+            to="/kanban"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100"
+          >
+            <Grid3X3 size={15} />
+            Kanban
+          </Link>
           <button
             type="button"
             onClick={() => load()}
