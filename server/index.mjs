@@ -113,7 +113,7 @@ app.get('/api/dashboard', asyncRoute(async (_req, res) => {
         count(*) filter (where upper(status) not in ('FINALIZADO', 'CONCLUIDO', 'CANCELADO'))::int as abertos,
         count(*) filter (where agendado_para::date = current_date)::int as hoje,
         count(*) filter (where created_at::date = current_date)::int as atendimentos_hoje,
-        count(*) filter (where upper(status) in ('FINALIZADO', 'CONCLUIDO') and coalesce(concluido_em, updated_at)::date = current_date)::int as solucionados_hoje,
+        count(*) filter (where upper(status) in ('FINALIZADO', 'CONCLUIDO'))::int as solucionados,
         count(*) filter (where reembolso_valor is not null or nullif(trim(coalesce(reembolso_motivo, '')), '') is not null)::int as reembolsados,
         coalesce(sum(reembolso_valor), 0)::numeric as valor_reembolso,
         coalesce(sum(valor_total), 0)::numeric as valor_total
@@ -357,8 +357,10 @@ app.get('/api/atendimentos', asyncRoute(async (req, res) => {
   const search = String(req.query.search || '').trim()
   const status = String(req.query.status || '').trim()
   const responsavel = String(req.query.responsavel || '').trim()
-  const page = Math.max(Number(req.query.page || 1), 1)
-  const pageSize = Math.min(Math.max(Number(req.query.pageSize || 20), 5), 100)
+  const requestedPage = Number(req.query.page || 1)
+  const requestedPageSize = Number(req.query.pageSize || 20)
+  const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1
+  const pageSize = Number.isFinite(requestedPageSize) ? Math.min(Math.max(requestedPageSize, 5), 100) : 20
   const offset = (page - 1) * pageSize
 
   const where = []

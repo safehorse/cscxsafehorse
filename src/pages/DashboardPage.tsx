@@ -243,7 +243,7 @@ export function DashboardPage() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Metric label="Atendimentos hoje" value={dashboard?.totais.atendimentos_hoje ?? 0} loading={loading} />
-            <Metric label="Solucionados hoje" value={dashboard?.totais.solucionados_hoje ?? 0} loading={loading} tone="emerald" />
+            <Metric label="Solucionados" value={dashboard?.totais.solucionados ?? 0} loading={loading} tone="emerald" />
             <Metric label="Reembolsados" value={dashboard?.totais.reembolsados ?? 0} loading={loading} tone="amber" />
             <Metric label="Valor reembolsado" value={money(dashboard?.totais.valor_reembolso)} loading={loading} tone="blue" />
           </div>

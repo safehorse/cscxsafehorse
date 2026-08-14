@@ -72,7 +72,7 @@ export interface DashboardData {
     abertos: number
     hoje: number
     atendimentos_hoje: number
-    solucionados_hoje: number
+    solucionados: number
     reembolsados: number
     valor_reembolso: string
     valor_total: string
