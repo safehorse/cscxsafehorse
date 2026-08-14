@@ -106,6 +106,9 @@ export const api = {
   pcpPedido: (getToken: () => Promise<string | null>, codigo: string) =>
     request<{ data: PcpPedido | null }>(`/api/pcp/pedidos/${encodeURIComponent(codigo)}`, getToken),
 
+  pcpPedidosCliente: (getToken: () => Promise<string | null>, codigoCliente: string) =>
+    request<{ data: PcpPedido[] }>(`/api/pcp/clientes/${encodeURIComponent(codigoCliente)}/pedidos`, getToken),
+
   whatsappStatus: (getToken: () => Promise<string | null>) =>
     request<{ data: WhatsappStatus }>('/api/whatsapp/status', getToken),
 

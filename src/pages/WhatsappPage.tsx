@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   LogOut,
   MessageCircle,
+  Package,
   Phone,
   RefreshCw,
   Save,
@@ -21,7 +22,7 @@ import logoSrc from '../assets/logo.png'
 import { UserNameButton } from '../components/UserNameButton'
 import { api } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
-import type { Atendimento, WhatsappChat, WhatsappClienteSugestao, WhatsappContato, WhatsappMensagem, WhatsappStatus } from '../lib/types'
+import type { Atendimento, PcpPedido, WhatsappChat, WhatsappClienteSugestao, WhatsappContato, WhatsappMensagem, WhatsappStatus } from '../lib/types'
 
 type Selection = {
   contato: WhatsappContato | null
@@ -53,6 +54,8 @@ export function WhatsappPage() {
   const [clienteNome, setClienteNome] = useState('')
   const [observacao, setObservacao] = useState('')
   const [sugestoes, setSugestoes] = useState<WhatsappClienteSugestao[]>([])
+  const [pedidos, setPedidos] = useState<PcpPedido[]>([])
+  const [loadingPedidos, setLoadingPedidos] = useState(false)
 
   const connected = status.status === 'conectado'
   const filteredChats = useMemo(() => {
@@ -125,16 +128,30 @@ export function WhatsappPage() {
   async function openChat(chat: WhatsappChat) {
     setSelectedChat(chat)
     setLoadingMessages(true)
+    setPedidos([])
     try {
       const { data } = await api.whatsappMessages(getToken, chat.id)
       setSelection(data)
       setCodigoCliente(data.contato.codigo_cliente || '')
       setClienteNome(data.contato.cliente_nome || chat.cliente_nome || chat.nome || '')
       setObservacao(data.contato.observacao || '')
+      if (data.contato.codigo_cliente) loadPedidos(data.contato.codigo_cliente)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao abrir conversa.')
     } finally {
       setLoadingMessages(false)
+    }
+  }
+
+  async function loadPedidos(codigoCliente: string) {
+    setLoadingPedidos(true)
+    try {
+      const { data } = await api.pcpPedidosCliente(getToken, codigoCliente)
+      setPedidos(data)
+    } catch {
+      setPedidos([])
+    } finally {
+      setLoadingPedidos(false)
     }
   }
 
@@ -155,6 +172,7 @@ export function WhatsappPage() {
         cliente_nome: data.contato.cliente_nome,
       } : chat))
       toast.success('Cliente ERP vinculado.')
+      if (data.contato.codigo_cliente) loadPedidos(data.contato.codigo_cliente)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao salvar vínculo.')
     } finally {
@@ -489,6 +507,40 @@ export function WhatsappPage() {
                 </div>
               )}
             </div>
+
+            <div className="border-t border-gray-100 p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Package size={16} className="text-blue-600" />
+                <h2 className="text-sm font-bold">Pedidos do cliente</h2>
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">{pedidos.length}</span>
+              </div>
+              {!selection.contato ? (
+                <p className="rounded-xl bg-gray-50 px-3 py-6 text-center text-sm text-gray-400">Nenhum cliente selecionado.</p>
+              ) : !selection.contato.codigo_cliente ? (
+                <p className="rounded-xl bg-amber-50 px-3 py-3 text-sm font-medium text-amber-800">Vincule o ID do cliente ERP para carregar os pedidos.</p>
+              ) : loadingPedidos ? (
+                <div className="grid h-24 place-items-center text-gray-400">
+                  <LoaderCircle className="animate-spin" size={20} />
+                </div>
+              ) : pedidos.length === 0 ? (
+                <p className="rounded-xl bg-gray-50 px-3 py-6 text-center text-sm text-gray-400">Nenhum pedido para este cliente.</p>
+              ) : (
+                <div className="space-y-2">
+                  {pedidos.map(pedido => (
+                    <div key={pedido.id} className="rounded-xl border border-gray-200 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 truncate text-sm font-bold">#{pedido.codigo_venda}</p>
+                        {pedido.situacao_erp && (
+                          <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">{pedido.situacao_erp}</span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">{money(pedido.valor_total)}</p>
+                      <p className="mt-2 text-[11px] font-medium text-gray-400">{date(pedido.data_pedido)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </aside>
         </main>
       )}
@@ -503,6 +555,13 @@ function statusLabel(status: WhatsappStatus) {
   if (status.status === 'iniciando') return 'Iniciando WhatsApp Web'
   if (status.status === 'erro') return 'Erro na conexão'
   return 'Desconectado'
+}
+
+function money(value?: number | null) {
+  if (value === null || value === undefined) return '-'
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
 function formatPhone(value?: string | null) {

@@ -586,6 +586,11 @@ app.post('/api/whatsapp/disconnect', asyncRoute(async (req, res) => {
   res.json({ data: getWhatsappStatus(getUserId(req)) })
 }))
 
+app.post('/api/whatsapp/pause', asyncRoute(async (req, res) => {
+  await pauseWhatsapp(getUserId(req))
+  res.json({ data: getWhatsappStatus(getUserId(req)) })
+}))
+
 app.get('/api/whatsapp/chats', asyncRoute(async (req, res) => {
   const client = getReadyWhatsappClient(getUserId(req))
   const chats = await client.getChats()
@@ -648,20 +653,59 @@ app.patch('/api/whatsapp/contatos/:id', asyncRoute(async (req, res) => {
     returning *
   `, [codigoCliente, clienteNome, observacao, req.params.id])
   if (!rows[0]) return res.status(404).json({ error: 'Contato nÃ£o encontrado.' })
+  if (codigoCliente) {
+    await upsertClienteLink(codigoCliente, clienteNome, rows[0].telefone).catch(() => null)
+  }
   const chamados = rows[0].codigo_cliente ? await findAtendimentosByCodigoCliente(rows[0].codigo_cliente) : []
   res.json({ data: { contato: rows[0], chamados } })
 }))
+
+async function upsertClienteLink(codigoCliente, nome, telefone) {
+  const byCodigo = await pool.query('select id from cscx_clientes where codigo_cliente = $1', [codigoCliente])
+  if (byCodigo.rows[0]) {
+    return pool.query(
+      'update cscx_clientes set nome = coalesce($2, nome), telefone = $3 where id = $1',
+      [byCodigo.rows[0].id, nome, telefone],
+    )
+  }
+  if (telefone) {
+    const byTelefone = await pool.query('select id from cscx_clientes where telefone = $1', [telefone])
+    if (byTelefone.rows[0]) {
+      return pool.query(
+        'update cscx_clientes set codigo_cliente = $2, nome = coalesce($3, nome) where id = $1',
+        [byTelefone.rows[0].id, codigoCliente, nome],
+      )
+    }
+  }
+  return pool.query(
+    'insert into cscx_clientes (codigo_cliente, nome, telefone) values ($1, $2, $3)',
+    [codigoCliente, nome, telefone],
+  )
+}
 
 app.get('/api/whatsapp/clientes', asyncRoute(async (req, res) => {
   const search = String(req.query.search || '').trim()
   if (search.length < 2) return res.json({ data: [] })
   const { rows } = await pool.query(`
-    select codigo_cliente, max(cliente) as cliente, count(*)::int as chamados
-    from cscx_atendimentos
-    where codigo_cliente is not null
-      and (codigo_cliente ilike $1 or cliente ilike $1)
-    group by codigo_cliente
-    order by max(cliente) asc nulls last
+    with chamados_por_cliente as (
+      select codigo_cliente, count(*)::int as chamados, max(cliente) as cliente
+      from cscx_atendimentos
+      where codigo_cliente is not null
+      group by codigo_cliente
+    ),
+    combinado as (
+      select c.codigo_cliente, coalesce(c.nome, a.cliente) as cliente, coalesce(a.chamados, 0) as chamados
+      from cscx_clientes c
+      left join chamados_por_cliente a on a.codigo_cliente = c.codigo_cliente
+      union
+      select a.codigo_cliente, a.cliente, a.chamados
+      from chamados_por_cliente a
+      where not exists (select 1 from cscx_clientes c where c.codigo_cliente = a.codigo_cliente)
+    )
+    select codigo_cliente, cliente, chamados
+    from combinado
+    where codigo_cliente ilike $1 or cliente ilike $1
+    order by cliente asc nulls last
     limit 12
   `, [`%${search}%`])
   res.json({ data: rows })
@@ -683,8 +727,67 @@ app.get('/api/pcp/pedidos/:codigo', asyncRoute(async (req, res) => {
   res.json({ data: normalized })
 }))
 
+app.get('/api/pcp/clientes/:codigoCliente/pedidos', asyncRoute(async (req, res) => {
+  if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
+  const codigo = encodeURIComponent(String(req.params.codigoCliente || '').trim())
+  if (!codigo) return res.json({ data: [] })
+  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,last_webhook_payload')
+  const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?codigo_cliente=eq.${codigo}&select=${select}&order=data_pedido.desc&limit=20`, {
+    headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) return res.status(response.status).json({ error: data?.message || 'Falha ao consultar pedidos do cliente.' })
+  res.json({ data: (Array.isArray(data) ? data : []).map(normalizePcpPedido) })
+}))
+
+app.post('/api/clientes/sync', asyncRoute(async (_req, res) => {
+  const result = await syncClientesFromPcp()
+  res.json({ data: result })
+}))
+
 function normalizePedidoCodigo(value) {
   return String(value || '').trim().replace(/\.0+$/, '')
+}
+
+async function syncClientesFromPcp() {
+  if (!PCP_API_URL || !PCP_API_KEY) {
+    const error = new Error('Integração PCP não configurada.')
+    error.status = 500
+    throw error
+  }
+  const clientes = new Map()
+  const pageSize = 1000
+  for (let offset = 0; ; offset += pageSize) {
+    const response = await fetch(
+      `${PCP_API_URL}/rest/v1/pedidos?select=codigo_cliente,nome_cliente&codigo_cliente=not.is.null&order=codigo_cliente&offset=${offset}&limit=${pageSize}`,
+      { headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` } },
+    )
+    const page = await response.json().catch(() => [])
+    if (!response.ok) {
+      const error = new Error(page?.message || 'Falha ao consultar clientes no PCP.')
+      error.status = response.status
+      throw error
+    }
+    for (const row of page) {
+      const codigo = String(row.codigo_cliente || '').trim()
+      if (!codigo) continue
+      if (!clientes.has(codigo) && row.nome_cliente) clientes.set(codigo, row.nome_cliente)
+      else if (!clientes.has(codigo)) clientes.set(codigo, null)
+    }
+    if (!Array.isArray(page) || page.length < pageSize) break
+  }
+
+  let upserted = 0
+  for (const [codigo, nome] of clientes) {
+    await pool.query(`
+      insert into cscx_clientes (codigo_cliente, nome)
+      values ($1, $2)
+      on conflict (codigo_cliente) do update set
+        nome = coalesce(cscx_clientes.nome, excluded.nome)
+    `, [codigo, nome])
+    upserted += 1
+  }
+  return { total: upserted }
 }
 
 app.post('/api/import/planilha', asyncRoute(async (req, res) => {
@@ -1194,6 +1297,29 @@ async function upsertWhatsappContato({ whatsappId, telefone, nome, lastMessageAt
       last_message_at = greatest(coalesce(cscx_whatsapp_contatos.last_message_at, '-infinity'::timestamptz), coalesce(excluded.last_message_at, '-infinity'::timestamptz))
     returning *
   `, [cleanedPhone, whatsappId, stringOrNull(nome), lastMessageAt])
+  const contato = rows[0]
+  if (!contato.codigo_cliente) {
+    const matched = await matchClienteByTelefone(cleanedPhone)
+    if (matched) return linkWhatsappContatoCliente(contato.id, matched.codigo_cliente, matched.nome)
+  }
+  return contato
+}
+
+async function matchClienteByTelefone(telefone) {
+  const { rows } = await pool.query(
+    'select codigo_cliente, nome from cscx_clientes where telefone = $1 limit 1',
+    [telefone],
+  )
+  return rows[0] || null
+}
+
+async function linkWhatsappContatoCliente(contatoId, codigoCliente, clienteNome) {
+  const { rows } = await pool.query(`
+    update cscx_whatsapp_contatos
+    set codigo_cliente = $2, cliente_nome = coalesce(cliente_nome, $3)
+    where id = $1
+    returning *
+  `, [contatoId, codigoCliente, stringOrNull(clienteNome)])
   return rows[0]
 }
 
@@ -1242,4 +1368,9 @@ app.use((err, _req, res, _next) => {
 
 app.listen(PORT, () => {
   console.log(`CS/CX API rodando na porta ${PORT}`)
+  if (DATABASE_URL && PCP_API_URL && PCP_API_KEY) {
+    syncClientesFromPcp()
+      .then(result => console.log(`Clientes sincronizados do PCP: ${result.total}`))
+      .catch(error => console.error('Falha ao sincronizar clientes do PCP:', error.message))
+  }
 })
