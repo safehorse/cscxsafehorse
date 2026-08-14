@@ -785,12 +785,9 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
                   onChange={value => update('setor', value)}
                   onCreate={() => createCadastro('setor')}
                 />
-                <CadastroField
-                  label="Responsavel"
-                  icon={<UserPlus size={15} />}
+                <ResponsavelListbox
                   value={form.responsavel}
                   options={cadastros.responsaveis}
-                  listId="responsaveis-list"
                   onChange={value => update('responsavel', value)}
                   onCreate={() => createCadastro('responsavel')}
                 />
@@ -945,6 +942,99 @@ function CadastroField({ label, value, options, listId, icon, onChange, onCreate
         </button>
       </div>
     </label>
+  )
+}
+
+function ResponsavelListbox({ value, options, onChange, onCreate }: {
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+  onCreate: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState(value)
+  const normalizedValue = value.trim().toLowerCase()
+  const exists = options.some(option => option.toLowerCase() === normalizedValue)
+  const filtered = options
+    .filter(option => option.toLowerCase().includes(query.trim().toLowerCase()))
+    .slice(0, 8)
+
+  function openList() {
+    setQuery(value)
+    setOpen(true)
+  }
+
+  function selectOption(option: string) {
+    onChange(option)
+    setQuery(option)
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative">
+      <span className="mb-1 block text-xs font-medium text-gray-500">Responsavel</span>
+      <div className="flex gap-2">
+        <div className="relative min-w-0 flex-1">
+          <UserPlus size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={open ? query : value}
+            onFocus={openList}
+            onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+            onChange={event => {
+              setQuery(event.target.value)
+              onChange(event.target.value)
+              setOpen(true)
+            }}
+            placeholder="Selecione ou digite..."
+            className="h-10 w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-8 text-sm outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          />
+          <ChevronRight
+            size={15}
+            className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+          />
+
+          {open && (
+            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+              {filtered.length === 0 ? (
+                <div className="px-3 py-3 text-sm text-gray-400">Nenhum responsavel encontrado.</div>
+              ) : (
+                <div className="max-h-56 overflow-y-auto p-1" role="listbox">
+                  {filtered.map(option => {
+                    const selected = option.toLowerCase() === normalizedValue
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onMouseDown={event => event.preventDefault()}
+                        onClick={() => selectOption(option)}
+                        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${selected ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        role="option"
+                        aria-selected={selected}
+                      >
+                        <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg ${selected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                          {selected ? <CheckCircle2 size={13} /> : <User size={13} />}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate font-medium">{option}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={onCreate}
+          disabled={!value.trim() || exists}
+          className="grid h-10 w-10 place-items-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 disabled:opacity-40"
+          title="Cadastrar responsavel"
+        >
+          <UserPlus size={15} />
+        </button>
+      </div>
+    </div>
   )
 }
 
