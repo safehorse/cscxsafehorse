@@ -48,6 +48,17 @@ export interface Agendamento {
   observacao: string | null
 }
 
+export interface Usuario {
+  id: string
+  clerk_user_id: string | null
+  email: string
+  nome: string | null
+  papel: 'admin' | 'cs'
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface DashboardData {
   totais: {
     total: number

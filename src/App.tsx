@@ -4,6 +4,7 @@ import { Toaster } from 'sonner'
 import { AgendaPage } from './pages/AgendaPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
+import { UsuariosPage } from './pages/UsuariosPage'
 
 export default function App() {
   return (
@@ -18,6 +19,12 @@ export default function App() {
         <Route path="/agenda" element={
           <>
             <SignedIn><AgendaPage /></SignedIn>
+            <SignedOut><Navigate to="/login" replace /></SignedOut>
+          </>
+        } />
+        <Route path="/usuarios" element={
+          <>
+            <SignedIn><UsuariosPage /></SignedIn>
             <SignedOut><Navigate to="/login" replace /></SignedOut>
           </>
         } />

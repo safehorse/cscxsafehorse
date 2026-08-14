@@ -187,6 +187,112 @@ app.get('/api/agenda', asyncRoute(async (req, res) => {
   res.json({ data: rows })
 }))
 
+app.get('/api/usuarios', asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(`
+    select id, clerk_user_id, email, nome, papel, ativo, created_at, updated_at
+    from cscx_usuarios
+    order by case papel when 'admin' then 0 else 1 end, nome nulls last, email
+  `)
+  res.json({ data: rows })
+}))
+
+app.post('/api/usuarios/me', asyncRoute(async (req, res) => {
+  const email = normalizeEmail(req.body.email)
+  const nome = stringOrNull(req.body.nome)
+  if (!email) return res.status(400).json({ error: 'Informe o email do usuario.' })
+
+  const found = await pool.query(`
+    select *
+    from cscx_usuarios
+    where clerk_user_id = $1 or lower(email) = $2
+    order by case when lower(email) = $2 then 0 else 1 end
+    limit 1
+  `, [getUserId(req), email])
+
+  if (found.rows[0]) {
+    const { rows } = await pool.query(`
+      update cscx_usuarios
+      set clerk_user_id = coalesce(clerk_user_id, $2),
+          nome = coalesce($3, nome),
+          email = $4,
+          ativo = true
+      where id = $1
+      returning *
+    `, [found.rows[0].id, getUserId(req), nome, email])
+    return res.json({ data: rows[0] })
+  }
+
+  const { rows } = await pool.query(`
+    insert into cscx_usuarios (clerk_user_id, email, nome, papel, ativo)
+    values ($1, $2, $3, 'cs', true)
+    returning *
+  `, [getUserId(req), email, nome])
+  res.status(201).json({ data: rows[0] })
+}))
+
+app.post('/api/usuarios', asyncRoute(async (req, res) => {
+  const email = normalizeEmail(req.body.email)
+  const nome = stringOrNull(req.body.nome)
+  const papel = normalizePapel(req.body.papel)
+  const ativo = req.body.ativo === undefined ? true : Boolean(req.body.ativo)
+  if (!email) return res.status(400).json({ error: 'Informe o email do usuario.' })
+
+  const found = await pool.query('select id from cscx_usuarios where lower(email) = $1 limit 1', [email])
+  if (found.rows[0]) {
+    const { rows } = await pool.query(`
+      update cscx_usuarios
+      set nome = $2,
+          papel = $3,
+          ativo = $4
+      where id = $1
+      returning *
+    `, [found.rows[0].id, nome, papel, ativo])
+    return res.json({ data: rows[0] })
+  }
+
+  const { rows } = await pool.query(`
+    insert into cscx_usuarios (email, nome, papel, ativo)
+    values ($1, $2, $3, $4)
+    returning *
+  `, [email, nome, papel, ativo])
+  res.status(201).json({ data: rows[0] })
+}))
+
+app.patch('/api/usuarios/:id', asyncRoute(async (req, res) => {
+  const fields = []
+  const values = []
+
+  if ('email' in req.body) {
+    const email = normalizeEmail(req.body.email)
+    if (!email) return res.status(400).json({ error: 'Informe um email valido.' })
+    values.push(email)
+    fields.push(`email = $${values.length}`)
+  }
+  if ('nome' in req.body) {
+    values.push(stringOrNull(req.body.nome))
+    fields.push(`nome = $${values.length}`)
+  }
+  if ('papel' in req.body) {
+    values.push(normalizePapel(req.body.papel))
+    fields.push(`papel = $${values.length}`)
+  }
+  if ('ativo' in req.body) {
+    values.push(Boolean(req.body.ativo))
+    fields.push(`ativo = $${values.length}`)
+  }
+
+  if (!fields.length) return res.status(400).json({ error: 'Nenhum campo valido para atualizar.' })
+  values.push(req.params.id)
+  const { rows } = await pool.query(`
+    update cscx_usuarios
+    set ${fields.join(', ')}
+    where id = $${values.length}
+    returning *
+  `, values)
+  if (!rows[0]) return res.status(404).json({ error: 'Usuario nao encontrado.' })
+  res.json({ data: rows[0] })
+}))
+
 app.post('/api/cadastros/setores', asyncRoute(async (req, res) => {
   const nome = stringOrNull(req.body.nome)
   if (!nome) return res.status(400).json({ error: 'Informe o setor.' })
@@ -396,6 +502,15 @@ function stringOrNull(value) {
   if (value === null || value === undefined) return null
   const text = String(value).trim()
   return text || null
+}
+
+function normalizeEmail(value) {
+  const email = stringOrNull(value)?.toLowerCase()
+  return email && email.includes('@') ? email : null
+}
+
+function normalizePapel(value) {
+  return value === 'admin' ? 'admin' : 'cs'
 }
 
 async function upsertAtendimento(row, userId) {

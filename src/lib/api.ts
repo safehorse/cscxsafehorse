@@ -1,4 +1,4 @@
-import type { Atendimento, CadastroOptions, DashboardData, PcpPedido } from './types'
+import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, Usuario } from './types'
 
 const API_URL = (import.meta.env.VITE_CSCX_API_URL as string || '').replace(/\/$/, '')
 
@@ -29,6 +29,18 @@ export const api = {
     if (filters.to) qs.set('to', filters.to)
     return request<{ data: Atendimento[] }>(`/api/agenda?${qs.toString()}`, getToken)
   },
+
+  usuarios: (getToken: () => Promise<string | null>) =>
+    request<{ data: Usuario[] }>('/api/usuarios', getToken),
+
+  syncUsuario: (getToken: () => Promise<string | null>, body: { email: string; nome?: string | null }) =>
+    request<{ data: Usuario }>('/api/usuarios/me', getToken, { method: 'POST', body: JSON.stringify(body) }),
+
+  saveUsuario: (getToken: () => Promise<string | null>, body: { email: string; nome?: string | null; papel: 'admin' | 'cs'; ativo?: boolean }) =>
+    request<{ data: Usuario }>('/api/usuarios', getToken, { method: 'POST', body: JSON.stringify(body) }),
+
+  updateUsuario: (getToken: () => Promise<string | null>, id: string, body: Partial<Pick<Usuario, 'email' | 'nome' | 'papel' | 'ativo'>>) =>
+    request<{ data: Usuario }>(`/api/usuarios/${id}`, getToken, { method: 'PATCH', body: JSON.stringify(body) }),
 
   atendimentos: (getToken: () => Promise<string | null>, filters: { search?: string; status?: string; responsavel?: string; page?: number; pageSize?: number }) => {
     const qs = new URLSearchParams()

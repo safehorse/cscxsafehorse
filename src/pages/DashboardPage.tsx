@@ -20,6 +20,7 @@ import {
   Search,
   User,
   UserPlus,
+  UsersRound,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -97,6 +98,14 @@ export function DashboardPage() {
     const timeout = window.setTimeout(load, 250)
     return () => window.clearTimeout(timeout)
   }, [search, status, responsavel, page])
+
+  useEffect(() => {
+    const email = user?.primaryEmailAddress?.emailAddress
+    if (!email) return
+    api.syncUsuario(getToken, { email, nome: user.fullName }).catch(() => {
+      // A nomeacao nao bloqueia o uso do app.
+    })
+  }, [user?.id])
 
   const totalPages = Math.max(1, Math.ceil(totalAtendimentos / PAGE_SIZE))
 
@@ -179,6 +188,13 @@ export function DashboardPage() {
           >
             <RefreshCw size={15} />
           </button>
+          <Link
+            to="/usuarios"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
+            title="Usuarios"
+          >
+            <UsersRound size={15} />
+          </Link>
           <div className="hidden items-center gap-2 rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-600 sm:flex">
             <User size={15} className="text-gray-400" />
             <span>{user?.fullName ?? user?.primaryEmailAddress?.emailAddress}</span>
