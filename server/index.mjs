@@ -1,14 +1,10 @@
 import 'dotenv/config'
-import fs from 'node:fs/promises'
 import express from 'express'
 import cors from 'cors'
 import pg from 'pg'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
-import qrcode from 'qrcode'
-import whatsappWeb from 'whatsapp-web.js'
 
 const { Pool } = pg
-const { Client: WhatsappClient, LocalAuth } = whatsappWeb
 
 const PORT = Number(process.env.PORT || 3001)
 const DATABASE_URL = process.env.DATABASE_URL
@@ -20,7 +16,6 @@ const PCP_API_URL = (process.env.PCP_API_URL || '').replace(/\/$/, '')
 const PCP_API_KEY = process.env.PCP_API_KEY || ''
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173'
 const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || CORS_ORIGIN.split(',')[0] || 'https://cscx.safehorse.com.br').replace(/\/$/, '')
-const WHATSAPP_SESSION_PATH = process.env.WHATSAPP_SESSION_PATH || '/opt/cscxsafehorse/whatsapp-session'
 
 if (!DATABASE_URL) {
   console.warn('DATABASE_URL não configurado. O servidor vai iniciar, mas as rotas de banco falharão.')
@@ -578,25 +573,6 @@ app.post('/api/agendamentos', asyncRoute(async (req, res) => {
     getUserId(req),
   ])
   res.status(201).json({ data: rows[0] })
-}))
-
-app.get('/api/whatsapp/status', asyncRoute(async (req, res) => {
-  res.json({ data: getWhatsappStatus(getUserId(req)) })
-}))
-
-app.post('/api/whatsapp/connect', asyncRoute(async (req, res) => {
-  await ensureWhatsappClient(getUserId(req))
-  res.json({ data: getWhatsappStatus(getUserId(req)) })
-}))
-
-app.post('/api/whatsapp/disconnect', asyncRoute(async (req, res) => {
-  await disconnectWhatsapp(getUserId(req))
-  res.json({ data: getWhatsappStatus(getUserId(req)) })
-}))
-
-app.post('/api/whatsapp/pause', asyncRoute(async (req, res) => {
-  await pauseWhatsapp(getUserId(req))
-  res.json({ data: getWhatsappStatus(getUserId(req)) })
 }))
 
 const EXTENSAO_STALE_MS = 45_000
@@ -1174,216 +1150,8 @@ async function hydrateItemValuesFromHistory(pedido) {
   }
 }
 
-const whatsappSessions = new Map()
-let whatsappLaunchingUserId = null
-
-function whatsappClientId(userId) {
-  return `cscx-${String(userId || 'service').replace(/[^a-zA-Z0-9_-]/g, '_')}`
-}
-
-async function destroyWhatsappClient(client) {
-  await Promise.race([
-    client.destroy().catch(() => null),
-    new Promise(resolve => setTimeout(resolve, 4000)),
-  ])
-}
-
-function getWhatsappSession(userId) {
-  let session = whatsappSessions.get(userId)
-  if (!session) {
-    session = {
-      client: null,
-      state: {
-        status: 'desconectado',
-        qr: null,
-        erro: null,
-        startedAt: null,
-        connectedAt: null,
-        updatedAt: new Date().toISOString(),
-      },
-    }
-    whatsappSessions.set(userId, session)
-  }
-  return session
-}
-
-function setWhatsappState(userId, next) {
-  const session = getWhatsappSession(userId)
-  session.state = { ...session.state, ...next, updatedAt: new Date().toISOString() }
-}
-
-function getWhatsappStatus(userId) {
-  const { state } = getWhatsappSession(userId)
-  return {
-    status: state.status,
-    qr: state.qr,
-    erro: state.erro,
-    connected_at: state.connectedAt,
-    updated_at: state.updatedAt,
-  }
-}
-
-async function ensureWhatsappClient(userId) {
-  const session = getWhatsappSession(userId)
-  if (session.client && session.state.status !== 'conectado' && session.state.startedAt) {
-    const elapsed = Date.now() - new Date(session.state.startedAt).getTime()
-    if (elapsed > 180_000) await disconnectWhatsapp(userId)
-  }
-  if (session.client) return session.client
-
-  if (whatsappLaunchingUserId && whatsappLaunchingUserId !== userId) {
-    const lockedSession = getWhatsappSession(whatsappLaunchingUserId)
-    const lockedElapsed = lockedSession.state.startedAt ? Date.now() - new Date(lockedSession.state.startedAt).getTime() : Infinity
-    if (lockedElapsed > 180_000) {
-      await disconnectWhatsapp(whatsappLaunchingUserId)
-    } else {
-      const error = new Error('Outro atendente está conectando o WhatsApp agora. Aguarde alguns segundos e tente novamente.')
-      error.status = 409
-      throw error
-    }
-  }
-  whatsappLaunchingUserId = userId
-
-  setWhatsappState(userId, { status: 'iniciando', erro: null, startedAt: new Date().toISOString() })
-  const client = new WhatsappClient({
-    authStrategy: new LocalAuth({
-      clientId: whatsappClientId(userId),
-      dataPath: WHATSAPP_SESSION_PATH,
-    }),
-    puppeteer: {
-      headless: true,
-      protocolTimeout: 120_000,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-extensions',
-        '--disable-site-isolation-trials',
-        '--disable-features=IsolateOrigins,site-per-process,Translate,MediaRouter',
-        '--renderer-process-limit=1',
-        '--js-flags=--max-old-space-size=192',
-      ],
-    },
-  })
-  session.client = client
-
-  const clearLaunchLock = () => {
-    if (whatsappLaunchingUserId === userId) whatsappLaunchingUserId = null
-  }
-
-  client.on('qr', async qr => {
-    const dataUrl = await qrcode.toDataURL(qr, { margin: 1, width: 320 })
-    setWhatsappState(userId, { status: 'aguardando_qr', qr: dataUrl, erro: null })
-  })
-
-  client.on('authenticated', () => {
-    setWhatsappState(userId, { status: 'autenticado', qr: null, erro: null })
-  })
-
-  client.on('ready', () => {
-    clearLaunchLock()
-    setWhatsappState(userId, { status: 'conectado', qr: null, erro: null, connectedAt: new Date().toISOString() })
-    syncPuppeteerChats(client).catch(error => console.error('Falha ao sincronizar chats:', error.message))
-  })
-
-  client.on('auth_failure', async message => {
-    clearLaunchLock()
-    setWhatsappState(userId, { status: 'erro', erro: message || 'Falha na autenticaÃ§Ã£o do WhatsApp.' })
-    if (session.client === client) session.client = null
-    await destroyWhatsappClient(client)
-  })
-
-  client.on('disconnected', async reason => {
-    clearLaunchLock()
-    setWhatsappState(userId, { status: 'desconectado', qr: null, erro: reason || null, connectedAt: null })
-    if (session.client === client) session.client = null
-    await destroyWhatsappClient(client)
-  })
-
-  client.on('message', async message => {
-    try {
-      if (message.fromMe || message.from?.endsWith('@g.us')) return
-      const chat = await message.getChat()
-      const contact = await message.getContact().catch(() => null)
-      const telefone = phoneFromWhatsappId(chat.id?._serialized || message.from)
-      const contato = await upsertWhatsappContato({
-        whatsappId: chat.id?._serialized || message.from,
-        telefone,
-        nome: contact?.pushname || contact?.name || chat.name || telefone,
-        lastMessageAt: message.timestamp ? new Date(message.timestamp * 1000).toISOString() : new Date().toISOString(),
-      })
-      await saveWhatsappMessage(contato.id, message)
-    } catch (error) {
-      console.error('Falha ao salvar mensagem WhatsApp:', error)
-    }
-  })
-
-  client.initialize().catch(async error => {
-    clearLaunchLock()
-    setWhatsappState(userId, { status: 'erro', erro: error.message || 'Falha ao iniciar WhatsApp Web.' })
-    if (session.client === client) session.client = null
-    await destroyWhatsappClient(client)
-  })
-
-  return client
-}
-
-function getReadyWhatsappClient(userId) {
-  const session = getWhatsappSession(userId)
-  if (!session.client || session.state.status !== 'conectado') {
-    const error = new Error('WhatsApp ainda nÃ£o conectado.')
-    error.status = 409
-    throw error
-  }
-  return session.client
-}
-
-async function disconnectWhatsapp(userId) {
-  return resetWhatsappClient(userId, { clearSession: true })
-}
-
-async function pauseWhatsapp(userId) {
-  return resetWhatsappClient(userId, { clearSession: false })
-}
-
-async function resetWhatsappClient(userId, { clearSession = false } = {}) {
-  const session = getWhatsappSession(userId)
-  if (session.client) {
-    const client = session.client
-    session.client = null
-    await destroyWhatsappClient(client)
-  }
-  if (whatsappLaunchingUserId === userId) whatsappLaunchingUserId = null
-  if (clearSession) await clearWhatsappSession(userId)
-  setWhatsappState(userId, { status: 'desconectado', qr: null, erro: null, startedAt: null, connectedAt: null })
-}
-
-async function clearWhatsappSession(userId) {
-  await fs.rm(`${WHATSAPP_SESSION_PATH}/session-${whatsappClientId(userId)}`, { recursive: true, force: true }).catch(() => null)
-  await fs.mkdir(WHATSAPP_SESSION_PATH, { recursive: true }).catch(() => null)
-}
-
 function phoneFromWhatsappId(value) {
   return String(value || '').split('@')[0].replace(/\D/g, '')
-}
-
-async function syncPuppeteerChats(client) {
-  const chats = await client.getChats()
-  for (const chat of chats.filter(item => !item.isGroup).slice(0, 60)) {
-    const contact = await chat.getContact().catch(() => null)
-    const telefone = phoneFromWhatsappId(chat.id?._serialized)
-    if (!telefone) continue
-    await upsertWhatsappContato({
-      whatsappId: chat.id?._serialized,
-      telefone,
-      nome: contact?.pushname || contact?.name || chat.name || telefone,
-      lastMessageAt: chat.lastMessage?.timestamp ? new Date(chat.lastMessage.timestamp * 1000).toISOString() : null,
-      lastMessage: chat.lastMessage?.body || null,
-      unreadCount: chat.unreadCount || 0,
-    })
-  }
 }
 
 async function upsertWhatsappContato({ whatsappId, telefone, nome, lastMessageAt, lastMessage, unreadCount }) {

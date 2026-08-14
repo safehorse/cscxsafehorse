@@ -113,12 +113,52 @@
     }
   }
 
+  function collectMessagesForChat(chatId) {
+    try {
+      const { Msg } = getCollections()
+      return Msg.getModelsArray()
+        .filter(msg => {
+          const remote = msg.id?.remote
+          const remoteId = typeof remote === 'string' ? remote : remote?._serialized
+          return remoteId === chatId
+        })
+        .slice(-80)
+        .map(serializeMessage)
+        .filter(Boolean)
+    } catch (error) {
+      post('log', `collectMessagesForChat falhou: ${error?.message}`)
+      return []
+    }
+  }
+
+  let lastActiveChatId = undefined
+  function checkActiveChat() {
+    try {
+      const { Chat } = getCollections()
+      const active = Chat.getModelsArray().find(chat => chat.active) || null
+      const serialized = active ? serializeChat(active) : null
+      const id = serialized?.id || null
+      if (id !== lastActiveChatId) {
+        lastActiveChatId = id
+        post('active-chat', serialized)
+        if (id) {
+          const mensagens = collectMessagesForChat(id)
+          if (mensagens.length) post('mensagens', mensagens)
+        }
+      }
+    } catch (error) {
+      post('log', `checkActiveChat falhou: ${error?.message}`)
+    }
+  }
+
   function start() {
     if (started) return
     started = true
     hookNewMessages()
     syncSnapshot()
+    checkActiveChat()
     setInterval(syncSnapshot, SYNC_INTERVAL_MS)
+    setInterval(checkActiveChat, 2000)
   }
 
   function waitUntilReady() {

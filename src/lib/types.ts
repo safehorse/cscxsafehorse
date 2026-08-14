@@ -114,59 +114,9 @@ export interface PcpPedido {
   itens: PcpPedidoItem[]
 }
 
-export interface WhatsappStatus {
-  status: 'desconectado' | 'iniciando' | 'aguardando_qr' | 'autenticado' | 'conectado' | 'erro'
-  qr: string | null
-  erro: string | null
-  connected_at: string | null
-  updated_at: string
-}
-
 export interface WhatsappExtensaoStatus {
   token: string
   status: 'desconectado' | 'conectado'
   ultimo_ping: string | null
 }
 
-export interface WhatsappChat {
-  id: string
-  telefone: string
-  nome: string | null
-  codigo_cliente: string | null
-  cliente_nome: string | null
-  unread_count: number
-  last_message: string
-  last_message_at: string | null
-}
-
-export interface WhatsappContato {
-  id: string
-  telefone: string
-  whatsapp_id: string
-  nome: string | null
-  codigo_cliente: string | null
-  cliente_nome: string | null
-  observacao: string | null
-  last_message_at: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface WhatsappMensagem {
-  id: string
-  contato_id: string
-  whatsapp_message_id: string | null
-  whatsapp_id: string
-  telefone: string
-  direcao: 'entrada' | 'saida'
-  conteudo: string | null
-  tipo: string | null
-  enviado_em: string | null
-  created_at: string
-}
-
-export interface WhatsappClienteSugestao {
-  codigo_cliente: string
-  cliente: string | null
-  chamados: number
-}
