@@ -10,6 +10,7 @@ import {
   LoaderCircle,
   LogOut,
   MessageSquareText,
+  Phone,
   RefreshCw,
   Search,
   UsersRound,
@@ -354,6 +355,12 @@ export function KanbanPage() {
                               </div>
                               <p className="truncate text-sm font-medium text-gray-700">{item.cliente ?? 'Cliente não informado'}</p>
                               <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-400">{item.descricao_produto ?? item.motivo ?? 'Sem descrição'}</p>
+                              {item.whatsapp_telefone && (
+                                <p className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
+                                  <Phone size={11} />
+                                  {formatPhone(item.whatsapp_telefone)}
+                                </p>
+                              )}
                               <div className="mt-3 flex items-center justify-between gap-2 text-[11px] font-medium text-gray-400">
                                 <span className="truncate">{item.responsavel ?? 'Sem responsável'}</span>
                                 <span>{date(item.data_solicitacao)}</span>
@@ -405,4 +412,10 @@ function date(value?: string | null) {
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return '-'
   return parsed.toLocaleDateString('pt-BR')
+}
+
+function formatPhone(value?: string | null) {
+  const phone = String(value || '').replace(/\D/g, '')
+  if (phone.length < 10) return phone || '-'
+  return `+${phone.slice(0, 2)} ${phone.slice(2, 4)} ${phone.slice(4)}`
 }

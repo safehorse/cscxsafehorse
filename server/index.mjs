@@ -517,10 +517,16 @@ app.get('/api/kanban/atendimentos', asyncRoute(async (req, res) => {
   const filters = buildAtendimentoFilters(req.query)
   const whereSql = filters.where.length ? `where ${filters.where.join(' and ')}` : ''
   const { rows } = await pool.query(`
-    select *
-    from cscx_atendimentos
+    select a.*, w.telefone as whatsapp_telefone
+    from cscx_atendimentos a
+    left join lateral (
+      select telefone from cscx_whatsapp_contatos
+      where codigo_cliente = a.codigo_cliente
+      order by last_message_at desc nulls last
+      limit 1
+    ) w on true
     ${whereSql}
-    order by coalesce(agendado_para, updated_at, created_at) desc
+    order by coalesce(a.agendado_para, a.updated_at, a.created_at) desc
     limit 500
   `, filters.values)
   res.json({ data: rows })

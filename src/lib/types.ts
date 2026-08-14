@@ -27,6 +27,7 @@ export interface Atendimento {
   pcp_pedido_id?: string | null
   pcp_item_id?: string | null
   pcp_payload?: unknown
+  whatsapp_telefone?: string | null
   created_at: string
   updated_at: string
   interacoes?: Interacao[]
