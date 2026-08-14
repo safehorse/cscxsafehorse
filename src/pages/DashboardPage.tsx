@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   Clock3,
   ExternalLink,
@@ -26,6 +27,7 @@ import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, PcpPedidoI
 
 const STATUS_OPTIONS = ['ABERTO', 'AGUARDANDO DEVOLUCAO', 'FINALIZADO', 'EM ANALISE', 'CREDITO GERADO', 'TROCA GERADA']
 const PRIORIDADES = ['baixa', 'normal', 'alta', 'urgente'] as const
+const PAGE_SIZE = 20
 
 const emptyWizard = {
   data_solicitacao: new Date().toISOString().slice(0, 10),
@@ -65,6 +67,8 @@ export function DashboardPage() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [responsavel, setResponsavel] = useState('')
+  const [page, setPage] = useState(1)
+  const [totalAtendimentos, setTotalAtendimentos] = useState(0)
   const [showCreate, setShowCreate] = useState(false)
   const [note, setNote] = useState('')
 
@@ -73,11 +77,12 @@ export function DashboardPage() {
     try {
       const [dash, list, options] = await Promise.all([
         api.dashboard(getToken),
-        api.atendimentos(getToken, { search, status, responsavel }),
+        api.atendimentos(getToken, { search, status, responsavel, page, pageSize: PAGE_SIZE }),
         api.cadastros(getToken),
       ])
       setDashboard(dash)
       setAtendimentos(list.data)
+      setTotalAtendimentos(list.total)
       setCadastros(options)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao carregar dados.')
@@ -89,7 +94,9 @@ export function DashboardPage() {
   useEffect(() => {
     const timeout = window.setTimeout(load, 250)
     return () => window.clearTimeout(timeout)
-  }, [search, status, responsavel])
+  }, [search, status, responsavel, page])
+
+  const totalPages = Math.max(1, Math.ceil(totalAtendimentos / PAGE_SIZE))
 
   async function reloadCadastros() {
     try {
@@ -201,14 +208,14 @@ export function DashboardPage() {
                   <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     value={search}
-                    onChange={event => setSearch(event.target.value)}
+                    onChange={event => { setSearch(event.target.value); setPage(1) }}
                     placeholder="Buscar pedido, cliente ou produto..."
                     className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-9 pr-3 text-sm outline-none transition-colors focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
                   />
                 </div>
                 <select
                   value={status}
-                  onChange={event => setStatus(event.target.value)}
+                  onChange={event => { setStatus(event.target.value); setPage(1) }}
                   className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-600 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 >
                   <option value="">Todos os status</option>
@@ -216,7 +223,7 @@ export function DashboardPage() {
                 </select>
                 <input
                   value={responsavel}
-                  onChange={event => setResponsavel(event.target.value)}
+                  onChange={event => { setResponsavel(event.target.value); setPage(1) }}
                   placeholder="Responsavel"
                   className="h-10 w-40 rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 />
@@ -238,31 +245,58 @@ export function DashboardPage() {
             ) : atendimentos.length === 0 ? (
               <div className="py-16 text-center text-sm text-gray-400">Nenhum atendimento encontrado.</div>
             ) : (
-              <div className="divide-y divide-gray-100">
-                {atendimentos.map(item => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => openDetail(item.id)}
-                    className="flex w-full items-center gap-4 px-4 py-4 text-left transition-colors hover:bg-gray-50"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-gray-950">#{item.numero_pedido ?? 'sem pedido'}</span>
-                        <StatusBadge status={item.status} />
-                        <PriorityBadge value={item.prioridade} />
+              <>
+                <div className="divide-y divide-gray-100">
+                  {atendimentos.map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => openDetail(item.id)}
+                      className="flex w-full items-center gap-4 px-4 py-4 text-left transition-colors hover:bg-gray-50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-gray-950">#{item.numero_pedido ?? 'sem pedido'}</span>
+                          <StatusBadge status={item.status} />
+                          <PriorityBadge value={item.prioridade} />
+                        </div>
+                        <p className="mt-1 truncate text-sm text-gray-600">{item.cliente ?? 'Cliente nao informado'}</p>
+                        <p className="mt-0.5 truncate text-xs text-gray-400">{item.descricao_produto ?? item.motivo ?? 'Sem descricao'}</p>
                       </div>
-                      <p className="mt-1 truncate text-sm text-gray-600">{item.cliente ?? 'Cliente nao informado'}</p>
-                      <p className="mt-0.5 truncate text-xs text-gray-400">{item.descricao_produto ?? item.motivo ?? 'Sem descricao'}</p>
-                    </div>
-                    <div className="hidden text-right text-xs text-gray-400 sm:block">
-                      <p>{date(item.data_solicitacao)}</p>
-                      <p>{item.responsavel ?? 'Sem responsavel'}</p>
-                    </div>
-                    <ChevronRight size={16} className="text-gray-300" />
-                  </button>
-                ))}
-              </div>
+                      <div className="hidden text-right text-xs text-gray-400 sm:block">
+                        <p>{date(item.data_solicitacao)}</p>
+                        <p>{item.responsavel ?? 'Sem responsavel'}</p>
+                      </div>
+                      <ChevronRight size={16} className="text-gray-300" />
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-4 py-3">
+                  <p className="text-xs text-gray-400">
+                    {totalAtendimentos} atendimento{totalAtendimentos !== 1 ? 's' : ''} - pagina {page} de {totalPages}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                      disabled={page <= 1}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                    >
+                      <ChevronLeft size={14} />
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={page >= totalPages}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                    >
+                      Proxima
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </section>
@@ -355,8 +389,8 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
   onConsultPcp: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-30 bg-gray-950/30 p-4 backdrop-blur-sm" onMouseDown={onClose}>
-      <div className="ml-auto h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
+    <div className="drawer-backdrop-in fixed inset-0 z-30 bg-gray-950/30 p-4 backdrop-blur-sm" onMouseDown={onClose}>
+      <div className="drawer-panel-in ml-auto h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
         <div className="sticky top-0 z-10 border-b border-gray-100 bg-white p-5">
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">

@@ -179,7 +179,9 @@ app.get('/api/atendimentos', asyncRoute(async (req, res) => {
   const search = String(req.query.search || '').trim()
   const status = String(req.query.status || '').trim()
   const responsavel = String(req.query.responsavel || '').trim()
-  const limit = Math.min(Number(req.query.limit || 80), 200)
+  const page = Math.max(Number(req.query.page || 1), 1)
+  const pageSize = Math.min(Math.max(Number(req.query.pageSize || 20), 5), 100)
+  const offset = (page - 1) * pageSize
 
   const where = []
   const values = []
@@ -197,16 +199,25 @@ app.get('/api/atendimentos', asyncRoute(async (req, res) => {
     where.push(`responsavel ilike $${values.length}`)
   }
 
-  values.push(limit)
+  const whereSql = where.length ? `where ${where.join(' and ')}` : ''
+  const countSql = `select count(*)::int as total from cscx_atendimentos ${whereSql}`
+  const countValues = [...values]
+
+  values.push(pageSize)
+  values.push(offset)
   const sql = `
     select *
     from cscx_atendimentos
-    ${where.length ? `where ${where.join(' and ')}` : ''}
+    ${whereSql}
     order by coalesce(agendado_para, created_at) desc
-    limit $${values.length}
+    limit $${values.length - 1}
+    offset $${values.length}
   `
-  const { rows } = await pool.query(sql, values)
-  res.json({ data: rows })
+  const [list, total] = await Promise.all([
+    pool.query(sql, values),
+    pool.query(countSql, countValues),
+  ])
+  res.json({ data: list.rows, total: total.rows[0]?.total ?? 0, page, pageSize })
 }))
 
 app.get('/api/atendimentos/:id', asyncRoute(async (req, res) => {

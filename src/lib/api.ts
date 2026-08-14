@@ -23,12 +23,14 @@ export const api = {
   dashboard: (getToken: () => Promise<string | null>) =>
     request<DashboardData>('/api/dashboard', getToken),
 
-  atendimentos: (getToken: () => Promise<string | null>, filters: { search?: string; status?: string; responsavel?: string }) => {
+  atendimentos: (getToken: () => Promise<string | null>, filters: { search?: string; status?: string; responsavel?: string; page?: number; pageSize?: number }) => {
     const qs = new URLSearchParams()
     if (filters.search) qs.set('search', filters.search)
     if (filters.status) qs.set('status', filters.status)
     if (filters.responsavel) qs.set('responsavel', filters.responsavel)
-    return request<{ data: Atendimento[] }>(`/api/atendimentos?${qs.toString()}`, getToken)
+    if (filters.page) qs.set('page', String(filters.page))
+    if (filters.pageSize) qs.set('pageSize', String(filters.pageSize))
+    return request<{ data: Atendimento[]; total: number; page: number; pageSize: number }>(`/api/atendimentos?${qs.toString()}`, getToken)
   },
 
   atendimento: (getToken: () => Promise<string | null>, id: string) =>
