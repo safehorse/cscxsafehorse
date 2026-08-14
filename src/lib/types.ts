@@ -118,6 +118,7 @@ export interface Cliente {
   email2: string | null
   contato: string | null
   cpf_cnpj: string | null
+  vendedor: string | null
 }
 
 export interface PcpPedidoResumo {

@@ -41,6 +41,7 @@ export function ClientesPage() {
   const [detailChamados, setDetailChamados] = useState<Atendimento[]>([])
   const [detailPedidos, setDetailPedidos] = useState<PcpPedido[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
+  const [expandedPedidoId, setExpandedPedidoId] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -59,6 +60,7 @@ export function ClientesPage() {
     setSelectedCliente(cliente)
     setDetailChamados([])
     setDetailPedidos([])
+    setExpandedPedidoId(null)
     setDetailLoading(true)
     try {
       const [chamadosResult, pedidosResult] = await Promise.all([
@@ -202,14 +204,17 @@ export function ClientesPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-gray-900">{cliente.nome ?? 'Sem nome'}</p>
-                    {cliente.telefone ? (
-                      <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-emerald-700">
-                        <Phone size={11} />
-                        {formatPhone(cliente.telefone)}
-                      </p>
-                    ) : (
-                      <p className="mt-0.5 text-xs text-gray-400">Sem telefone</p>
-                    )}
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                      {cliente.telefone ? (
+                        <p className="flex items-center gap-1 text-xs font-medium text-emerald-700">
+                          <Phone size={11} />
+                          {formatPhone(cliente.telefone)}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-400">Sem telefone</p>
+                      )}
+                      {cliente.vendedor && <p className="text-xs text-gray-400">Vendedor: {cliente.vendedor}</p>}
+                    </div>
                   </div>
                   <span className="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
                     {cliente.chamados} chamado{cliente.chamados !== 1 ? 's' : ''}
@@ -278,6 +283,7 @@ export function ClientesPage() {
                     <span>{[selectedCliente.email1, selectedCliente.email2].filter(Boolean).join(' · ')}</span>
                   )}
                   {selectedCliente.contato && <span>Contato: {selectedCliente.contato}</span>}
+                  {selectedCliente.vendedor && <span>Vendedor: {selectedCliente.vendedor}</span>}
                 </div>
                 {(selectedCliente.endereco || selectedCliente.cidade) && (
                   <p className="mt-1 text-xs text-gray-500">
@@ -345,7 +351,25 @@ export function ClientesPage() {
                   ) : (
                     <div className="space-y-2">
                       {detailPedidos.map(pedido => (
-                        <PedidoResumo key={pedido.id} pedido={pedido} compact />
+                        <div key={pedido.id} className="overflow-hidden rounded-xl border border-gray-200">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedPedidoId(prev => (prev === pedido.id ? null : pedido.id))}
+                            className="flex w-full items-center gap-2 p-3 text-left transition-colors hover:bg-gray-50"
+                          >
+                            <p className="min-w-0 flex-1 truncate text-sm font-bold">#{pedido.codigo_venda}</p>
+                            {pedido.situacao_erp && (
+                              <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">{pedido.situacao_erp}</span>
+                            )}
+                            <p className="shrink-0 text-[11px] font-medium text-gray-400">{date(pedido.data_pedido)}</p>
+                            <ChevronRight size={15} className={`shrink-0 text-gray-400 transition-transform ${expandedPedidoId === pedido.id ? 'rotate-90' : ''}`} />
+                          </button>
+                          {expandedPedidoId === pedido.id && (
+                            <div className="border-t border-gray-100 p-3 pt-0">
+                              <PedidoResumo pedido={pedido} compact />
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}

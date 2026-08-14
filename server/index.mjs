@@ -933,7 +933,7 @@ app.get('/api/clientes', asyncRoute(async (req, res) => {
     pool.query(`
       select c.codigo_cliente, c.nome, c.telefone,
         c.endereco, c.numero, c.bairro, c.cidade, c.uf, c.cep,
-        c.telefone1, c.telefone2, c.telefone3, c.email1, c.email2, c.contato, c.cpf_cnpj,
+        c.telefone1, c.telefone2, c.telefone3, c.email1, c.email2, c.contato, c.cpf_cnpj, c.vendedor,
         (select count(*)::int from cscx_atendimentos a where a.codigo_cliente = c.codigo_cliente) as chamados
       from cscx_clientes c
       ${whereSql}
