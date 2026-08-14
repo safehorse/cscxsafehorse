@@ -14,8 +14,10 @@ import {
   LogOut,
   MessageSquareText,
   PackageSearch,
+  Pencil,
   Plus,
   RefreshCw,
+  Save,
   Search,
   User,
   UserPlus,
@@ -187,6 +189,19 @@ export function DashboardPage() {
       load()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao salvar reembolso.')
+    }
+  }
+
+  async function saveAtendimentoChanges(id: string, form: WizardForm) {
+    try {
+      const { data } = await api.updateAtendimento(getToken, id, formToPayload(form))
+      setSelected(prev => prev ? { ...prev, ...data } : data)
+      setAtendimentos(prev => prev.map(item => item.id === data.id ? { ...item, ...data } : item))
+      toast.success('Chamado atualizado.')
+      load()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao salvar chamado.')
+      throw error
     }
   }
 
@@ -488,6 +503,7 @@ export function DashboardPage() {
           setNote={setNote}
           onClose={() => setSelected(null)}
           onSaveStatus={saveStatus}
+          onSaveAtendimento={saveAtendimentoChanges}
           onSaveReembolso={saveReembolso}
           onAddNote={addNote}
           onLoadPedido={loadPedidoFromPcp}
@@ -512,13 +528,14 @@ export function DashboardPage() {
   )
 }
 
-function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus, onSaveReembolso, onAddNote, onLoadPedido }: {
+function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido }: {
   selected: Atendimento
   loading: boolean
   note: string
   setNote: (value: string) => void
   onClose: () => void
   onSaveStatus: (status: string) => Promise<void>
+  onSaveAtendimento: (id: string, form: WizardForm) => Promise<void>
   onSaveReembolso: (valor: number | null, motivo: string) => Promise<void>
   onAddNote: () => void
   onLoadPedido: () => Promise<PcpPedido | null>
@@ -533,6 +550,9 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
   const [showPedido, setShowPedido] = useState(false)
   const [pedido, setPedido] = useState<PcpPedido | null>(null)
   const [loadingPedido, setLoadingPedido] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState<WizardForm>(() => atendimentoToForm(selected))
+  const [savingEdit, setSavingEdit] = useState(false)
   const statusChanged = draftStatus !== selected.status
 
   useEffect(() => {
@@ -543,7 +563,9 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
     setReembolsoMotivo(selected.reembolso_motivo ?? '')
     setShowPedido(false)
     setPedido(null)
-  }, [selected.id, selected.status, selected.reembolso_valor, selected.reembolso_motivo])
+    setEditing(false)
+    setEditForm(atendimentoToForm(selected))
+  }, [selected.id, selected.status, selected.updated_at, selected.reembolso_valor, selected.reembolso_motivo])
 
   function requestClose() {
     if (closing) return
@@ -584,6 +606,22 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
     }
   }
 
+  function updateEdit(key: keyof WizardForm, value: string) {
+    setEditForm(prev => ({ ...prev, [key]: value }))
+  }
+
+  async function saveEdit() {
+    if (!editForm.numero_pedido.trim()) return toast.warning('Informe o número do pedido.')
+    if (!editForm.cliente.trim()) return toast.warning('Informe o cliente.')
+    setSavingEdit(true)
+    try {
+      await onSaveAtendimento(selected.id, editForm)
+      setEditing(false)
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   return (
     <div className={`${closing ? 'drawer-backdrop-out' : 'drawer-backdrop-in'} fixed inset-0 z-30 bg-gray-950/30 p-4 backdrop-blur-sm`} onMouseDown={requestClose}>
       <div className={`${closing ? 'drawer-panel-out' : 'drawer-panel-in'} ml-auto h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl`} onMouseDown={event => event.stopPropagation()}>
@@ -593,6 +631,14 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
               <h2 className="truncate text-xl font-bold text-gray-950">Pedido #{selected.numero_pedido ?? 'sem número'}</h2>
               <p className="mt-1 truncate text-sm text-gray-500">{selected.cliente ?? 'Cliente não informado'}</p>
             </div>
+            <button
+              type="button"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+              onClick={() => setEditing(prev => !prev)}
+            >
+              <Pencil size={14} />
+              {editing ? 'Cancelar' : 'Editar'}
+            </button>
             <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={requestClose}>
               <X size={18} />
             </button>
@@ -611,28 +657,79 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
               {selected.agendado_para && <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">{dateTime(selected.agendado_para)}</span>}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Info label="ID cliente" value={selected.codigo_cliente} />
-              <Info label="Produto" value={selected.descricao_produto} />
-              <Info label="Código produto" value={selected.codigo_produto} />
-              <Info label="Quantidade" value={selected.quantidade?.toString()} />
-              <Info label="Valor unitario" value={money(selected.valor_unitario)} />
-              <Info label="Valor total" value={money(selected.valor_total)} />
-              <Info label="Valor reembolso" value={money(selected.reembolso_valor)} />
-              <Info label="Setor" value={selected.setor} />
-              <Info label="Responsável" value={selected.responsavel} />
-              <Info label="Vendedor" value={selected.vendedor} />
-              <Info label="Novo pedido" value={selected.novo_pedido} />
-            </div>
+            {editing ? (
+              <section className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-blue-950">Editar chamado</h3>
+                    <p className="text-xs text-blue-700">Altere os dados e clique em salvar.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={saveEdit}
+                    disabled={savingEdit}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    {savingEdit ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}
+                    Salvar alterações
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Data solicitação" type="date" value={editForm.data_solicitacao} onChange={value => updateEdit('data_solicitacao', value)} />
+                  <Field label="Número do pedido" value={editForm.numero_pedido} onChange={value => updateEdit('numero_pedido', value)} />
+                  <Field label="ID cliente" value={editForm.codigo_cliente} onChange={value => updateEdit('codigo_cliente', value)} />
+                  <Field label="Cliente" value={editForm.cliente} onChange={value => updateEdit('cliente', value)} />
+                  <Field label="Código produto" value={editForm.codigo_produto} onChange={value => updateEdit('codigo_produto', value)} />
+                  <Field label="Produto" value={editForm.descricao_produto} onChange={value => updateEdit('descricao_produto', value)} />
+                  <Field label="Quantidade" value={editForm.quantidade} onChange={value => updateEdit('quantidade', value)} />
+                  <Field label="Valor unitário" value={editForm.valor_unitario} onChange={value => updateEdit('valor_unitario', value)} />
+                  <Field label="Valor total" value={editForm.valor_total} onChange={value => updateEdit('valor_total', value)} />
+                  <Field label="Vendedor" value={editForm.vendedor} onChange={value => updateEdit('vendedor', value)} />
+                  <Field label="Motivo" value={editForm.motivo} onChange={value => updateEdit('motivo', value)} />
+                  <SelectField label="Status" value={editForm.status} options={STATUS_OPTIONS} onChange={value => updateEdit('status', value)} />
+                  <Field label="Setor" value={editForm.setor} onChange={value => updateEdit('setor', value)} />
+                  <Field label="Responsável" value={editForm.responsavel} onChange={value => updateEdit('responsavel', value)} />
+                  <Field label="Próxima ação" value={editForm.proxima_acao} onChange={value => updateEdit('proxima_acao', value)} />
+                  <DateTimePicker label="Agendado para" value={editForm.agendado_para} onChange={value => updateEdit('agendado_para', value)} />
+                  <SelectField label="Prioridade" value={editForm.prioridade} options={[...PRIORIDADES]} onChange={value => updateEdit('prioridade', value)} />
+                  <Field label="Novo pedido" value={editForm.novo_pedido} onChange={value => updateEdit('novo_pedido', value)} />
+                  <label className="sm:col-span-2">
+                    <span className="mb-1 block text-xs font-medium text-gray-500">Descrição da situação</span>
+                    <textarea
+                      value={editForm.descricao_situacao}
+                      onChange={event => updateEdit('descricao_situacao', event.target.value)}
+                      rows={4}
+                      className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                </div>
+              </section>
+            ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Info label="ID cliente" value={selected.codigo_cliente} />
+                  <Info label="Produto" value={selected.descricao_produto} />
+                  <Info label="Código produto" value={selected.codigo_produto} />
+                  <Info label="Quantidade" value={selected.quantidade?.toString()} />
+                  <Info label="Valor unitario" value={money(selected.valor_unitario)} />
+                  <Info label="Valor total" value={money(selected.valor_total)} />
+                  <Info label="Valor reembolso" value={money(selected.reembolso_valor)} />
+                  <Info label="Setor" value={selected.setor} />
+                  <Info label="Responsável" value={selected.responsavel} />
+                  <Info label="Vendedor" value={selected.vendedor} />
+                  <Info label="Novo pedido" value={selected.novo_pedido} />
+                </div>
 
-            <section>
-              <h3 className="mb-2 text-sm font-semibold text-gray-950">Situação</h3>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed text-gray-700">
-                <p className="font-medium text-gray-900">{selected.motivo ?? 'Sem motivo informado'}</p>
-                {selected.descricao_situacao && <p className="mt-2 whitespace-pre-wrap">{selected.descricao_situacao}</p>}
-                {selected.proxima_acao && <p className="mt-2 text-blue-700">Próxima ação: {selected.proxima_acao}</p>}
-              </div>
-            </section>
+                <section>
+                  <h3 className="mb-2 text-sm font-semibold text-gray-950">Situação</h3>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed text-gray-700">
+                    <p className="font-medium text-gray-900">{selected.motivo ?? 'Sem motivo informado'}</p>
+                    {selected.descricao_situacao && <p className="mt-2 whitespace-pre-wrap">{selected.descricao_situacao}</p>}
+                    {selected.proxima_acao && <p className="mt-2 text-blue-700">Próxima ação: {selected.proxima_acao}</p>}
+                  </div>
+                </section>
+              </>
+            )}
 
             {showPedido && (
               <section className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
@@ -1493,4 +1590,36 @@ function formToPayload(form: WizardForm) {
     agendado_para: form.agendado_para || null,
     prioridade: form.prioridade as 'baixa' | 'normal' | 'alta' | 'urgente',
   }
+}
+
+function atendimentoToForm(item: Atendimento): WizardForm {
+  return {
+    data_solicitacao: toDateInput(item.data_solicitacao),
+    numero_pedido: item.numero_pedido ?? '',
+    codigo_cliente: item.codigo_cliente ?? '',
+    cliente: item.cliente ?? '',
+    codigo_produto: item.codigo_produto ?? '',
+    descricao_produto: item.descricao_produto ?? '',
+    quantidade: item.quantidade != null ? String(item.quantidade) : '',
+    valor_unitario: item.valor_unitario != null ? String(item.valor_unitario) : '',
+    valor_total: item.valor_total != null ? String(item.valor_total) : '',
+    motivo: item.motivo ?? '',
+    setor: item.setor ?? '',
+    responsavel: item.responsavel ?? '',
+    proxima_acao: item.proxima_acao ?? '',
+    status: item.status || 'ABERTO',
+    novo_pedido: item.novo_pedido ?? '',
+    cliente_tem_desconto: item.cliente_tem_desconto ?? '',
+    vendedor: item.vendedor ?? '',
+    descricao_situacao: item.descricao_situacao ?? '',
+    prioridade: item.prioridade ?? 'normal',
+    agendado_para: item.agendado_para ?? '',
+  }
+}
+
+function toDateInput(value?: string | null) {
+  if (!value) return ''
+  const parsed = new Date(value)
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10)
+  return value.slice(0, 10)
 }

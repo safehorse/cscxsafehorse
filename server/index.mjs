@@ -474,7 +474,7 @@ app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   const values = []
   for (const field of allowed) {
     if (!(field in req.body)) continue
-    values.push(field === 'status' ? normalizaStatus(req.body[field]) : req.body[field] || null)
+    values.push(normalizePatchValue(field, req.body[field]))
     sets.push(`${field} = $${values.length}`)
   }
   if (!sets.length) return res.status(400).json({ error: 'Nenhum campo válido para atualizar.' })
@@ -582,6 +582,15 @@ function atendimentoFromBody(body) {
     pcp_item_id: stringOrNull(body.pcp_item_id ?? body.pcpItemId),
     pcp_payload: body.pcp_payload ?? body.pcpPayload ?? null,
   }
+}
+
+function normalizePatchValue(field, value) {
+  if (field === 'status') return normalizaStatus(value)
+  if (['quantidade', 'valor_unitario', 'valor_total', 'reembolso_valor'].includes(field)) return toNumberOrNull(value)
+  if (field === 'data_solicitacao') return toDateOrNull(value)
+  if (['agendado_para', 'concluido_em', 'reembolso_em'].includes(field)) return value || null
+  if (field === 'pcp_payload') return value ?? null
+  return stringOrNull(value)
 }
 
 function stringOrNull(value) {
