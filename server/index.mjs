@@ -151,6 +151,42 @@ app.get('/api/cadastros', asyncRoute(async (_req, res) => {
   })
 }))
 
+app.get('/api/agenda', asyncRoute(async (req, res) => {
+  const from = String(req.query.from || '').trim()
+  const to = String(req.query.to || '').trim()
+  const values = []
+  const where = ['agendado_para is not null']
+
+  if (from) {
+    values.push(from)
+    where.push(`agendado_para >= $${values.length}::timestamptz`)
+  }
+
+  if (to) {
+    values.push(to)
+    where.push(`agendado_para < $${values.length}::timestamptz`)
+  }
+
+  const { rows } = await pool.query(`
+    select
+      id,
+      numero_pedido,
+      cliente,
+      status,
+      responsavel,
+      agendado_para,
+      proxima_acao,
+      prioridade,
+      descricao_produto,
+      motivo
+    from cscx_atendimentos
+    where ${where.join(' and ')}
+    order by agendado_para asc, cliente asc
+  `, values)
+
+  res.json({ data: rows })
+}))
+
 app.post('/api/cadastros/setores', asyncRoute(async (req, res) => {
   const nome = stringOrNull(req.body.nome)
   if (!nome) return res.status(400).json({ error: 'Informe o setor.' })

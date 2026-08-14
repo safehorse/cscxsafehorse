@@ -23,6 +23,13 @@ export const api = {
   dashboard: (getToken: () => Promise<string | null>) =>
     request<DashboardData>('/api/dashboard', getToken),
 
+  agenda: (getToken: () => Promise<string | null>, filters: { from?: string; to?: string }) => {
+    const qs = new URLSearchParams()
+    if (filters.from) qs.set('from', filters.from)
+    if (filters.to) qs.set('to', filters.to)
+    return request<{ data: Atendimento[] }>(`/api/agenda?${qs.toString()}`, getToken)
+  },
+
   atendimentos: (getToken: () => Promise<string | null>, filters: { search?: string; status?: string; responsavel?: string; page?: number; pageSize?: number }) => {
     const qs = new URLSearchParams()
     if (filters.search) qs.set('search', filters.search)

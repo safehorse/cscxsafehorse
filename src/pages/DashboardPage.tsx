@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth, useClerk, useUser } from '@clerk/clerk-react'
+import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
   Building2,
@@ -10,6 +11,7 @@ import {
   Clock3,
   ExternalLink,
   LoaderCircle,
+  List,
   LogOut,
   MessageSquareText,
   PackageSearch,
@@ -303,9 +305,24 @@ export function DashboardPage() {
 
         <aside className="space-y-5">
           <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <div className="mb-3 flex items-center gap-2">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               <CalendarDays size={16} className="text-blue-500" />
               <h2 className="text-sm font-semibold text-gray-950">Agenda</h2>
+              <div className="flex-1" />
+              <Link
+                to="/agenda?modo=lista"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                <List size={13} />
+                Modo lista
+              </Link>
+              <Link
+                to="/agenda"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
+              >
+                <CalendarDays size={13} />
+                Abrir agenda
+              </Link>
             </div>
             {agenda.length === 0 ? (
               <p className="py-6 text-center text-sm text-gray-400">Sem agenda definida.</p>
