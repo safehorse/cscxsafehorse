@@ -28,6 +28,7 @@ import { toast } from 'sonner'
 import logoSrc from '../assets/logo.png'
 import { DateTimePicker } from '../components/DateTimePicker'
 import { api, type AtendimentoFilters } from '../lib/api'
+import { getStatusTone } from '../lib/statusStyles'
 import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, PcpPedidoItem } from '../lib/types'
 
 const STATUS_OPTIONS = ['ABERTO', 'AGUARDANDO DEVOLUÇÃO', 'FINALIZADO', 'EM ANÁLISE', 'EM PRODUÇÃO', 'CRÉDITO GERADO', 'TROCA GERADA']
@@ -1341,14 +1342,18 @@ function StatusChart({ rows, loading }: { rows: DashboardData['status']; loading
     <div className="space-y-3">
       {rows.map(row => {
         const percent = Math.max(6, Math.round((row.total / max) * 100))
+        const tone = getStatusTone(row.status)
         return (
-          <div key={row.status} className="rounded-xl bg-gray-50 px-3 py-2">
+          <div key={row.status} className={`rounded-xl border px-3 py-2 ${tone.card}`}>
             <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-              <span className="min-w-0 truncate text-gray-600">{row.status}</span>
+              <span className={`min-w-0 truncate font-semibold ${tone.text}`}>
+                <span className={`mr-2 inline-block h-2 w-2 rounded-full align-middle ${tone.dot}`} />
+                {row.status}
+              </span>
               <strong className="shrink-0 text-gray-950">{row.total}</strong>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-white">
-              <div className="h-full rounded-full bg-blue-500 transition-all duration-500" style={{ width: `${percent}%` }} />
+            <div className={`h-2 overflow-hidden rounded-full ${tone.track}`}>
+              <div className={`h-full rounded-full transition-all duration-500 ${tone.bar}`} style={{ width: `${percent}%` }} />
             </div>
           </div>
         )
@@ -1526,14 +1531,8 @@ function Info({ label, value }: { label: string; value: string | null | undefine
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const done = ['FINALIZADO', 'CONCLUIDO'].includes(status)
-  const wait = status.includes('AGUARDANDO')
-  const className = done
-    ? 'bg-emerald-50 text-emerald-700'
-    : wait
-      ? 'bg-amber-50 text-amber-700'
-      : 'bg-blue-50 text-blue-700'
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{status}</span>
+  const tone = getStatusTone(status)
+  return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tone.badge}`}>{status}</span>
 }
 
 function PriorityBadge({ value }: { value?: string }) {

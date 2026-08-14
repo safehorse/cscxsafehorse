@@ -20,6 +20,7 @@ import {
 import { toast } from 'sonner'
 import logoSrc from '../assets/logo.png'
 import { api } from '../lib/api'
+import { getStatusTone } from '../lib/statusStyles'
 import type { Atendimento } from '../lib/types'
 
 type ViewMode = 'calendar' | 'list'
@@ -380,14 +381,8 @@ function Info({ label, value }: { label: string; value: string | number | null |
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const done = ['FINALIZADO', 'CONCLUIDO'].includes(status)
-  const wait = status.includes('AGUARDANDO')
-  const className = done
-    ? 'bg-emerald-50 text-emerald-700'
-    : wait
-      ? 'bg-amber-50 text-amber-700'
-      : 'bg-blue-50 text-blue-700'
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{status}</span>
+  const tone = getStatusTone(status)
+  return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tone.badge}`}>{status}</span>
 }
 
 function startOfMonth(date: Date) {
