@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
-  ExternalLink,
   LoaderCircle,
   List,
   LogOut,
@@ -203,14 +202,16 @@ export function DashboardPage() {
     }
   }
 
-  async function consultPcp() {
-    if (!selected?.numero_pedido) return
+  async function loadPedidoFromPcp() {
+    if (!selected?.numero_pedido) return null
     try {
       const { data } = await api.pcpPedido(getToken, selected.numero_pedido)
       if (!data) toast.warning('Pedido não encontrado no PCP.')
       else toast.success('Pedido encontrado no PCP.')
+      return data
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao consultar PCP.')
+      return null
     }
   }
 
@@ -487,7 +488,7 @@ export function DashboardPage() {
           onSaveStatus={saveStatus}
           onSaveReembolso={saveReembolso}
           onAddNote={addNote}
-          onConsultPcp={consultPcp}
+          onLoadPedido={loadPedidoFromPcp}
         />
       )}
 
@@ -509,7 +510,7 @@ export function DashboardPage() {
   )
 }
 
-function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus, onSaveReembolso, onAddNote, onConsultPcp }: {
+function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus, onSaveReembolso, onAddNote, onLoadPedido }: {
   selected: Atendimento
   loading: boolean
   note: string
@@ -518,22 +519,35 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
   onSaveStatus: (status: string) => Promise<void>
   onSaveReembolso: (valor: number | null, motivo: string) => Promise<void>
   onAddNote: () => void
-  onConsultPcp: () => void
+  onLoadPedido: () => Promise<PcpPedido | null>
 }) {
+  const [closing, setClosing] = useState(false)
   const [draftStatus, setDraftStatus] = useState(selected.status)
   const [savingStatus, setSavingStatus] = useState(false)
   const [showReembolso, setShowReembolso] = useState(Boolean(selected.reembolso_valor || selected.reembolso_motivo))
   const [reembolsoValor, setReembolsoValor] = useState(selected.reembolso_valor != null ? String(selected.reembolso_valor) : '')
   const [reembolsoMotivo, setReembolsoMotivo] = useState(selected.reembolso_motivo ?? '')
   const [savingReembolso, setSavingReembolso] = useState(false)
+  const [showPedido, setShowPedido] = useState(false)
+  const [pedido, setPedido] = useState<PcpPedido | null>(null)
+  const [loadingPedido, setLoadingPedido] = useState(false)
   const statusChanged = draftStatus !== selected.status
 
   useEffect(() => {
+    setClosing(false)
     setDraftStatus(selected.status)
     setShowReembolso(Boolean(selected.reembolso_valor || selected.reembolso_motivo))
     setReembolsoValor(selected.reembolso_valor != null ? String(selected.reembolso_valor) : '')
     setReembolsoMotivo(selected.reembolso_motivo ?? '')
+    setShowPedido(false)
+    setPedido(null)
   }, [selected.id, selected.status, selected.reembolso_valor, selected.reembolso_motivo])
+
+  function requestClose() {
+    if (closing) return
+    setClosing(true)
+    window.setTimeout(onClose, 180)
+  }
 
   async function saveDraftStatus() {
     if (!statusChanged) return
@@ -557,16 +571,27 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
     }
   }
 
+  async function viewPedido() {
+    setShowPedido(true)
+    if (pedido || loadingPedido) return
+    setLoadingPedido(true)
+    try {
+      setPedido(await onLoadPedido())
+    } finally {
+      setLoadingPedido(false)
+    }
+  }
+
   return (
-    <div className="drawer-backdrop-in fixed inset-0 z-30 bg-gray-950/30 p-4 backdrop-blur-sm" onMouseDown={onClose}>
-      <div className="drawer-panel-in ml-auto h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
+    <div className={`${closing ? 'drawer-backdrop-out' : 'drawer-backdrop-in'} fixed inset-0 z-30 bg-gray-950/30 p-4 backdrop-blur-sm`} onMouseDown={requestClose}>
+      <div className={`${closing ? 'drawer-panel-out' : 'drawer-panel-in'} ml-auto h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl`} onMouseDown={event => event.stopPropagation()}>
         <div className="sticky top-0 z-10 border-b border-gray-100 bg-white p-5">
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
               <h2 className="truncate text-xl font-bold text-gray-950">Pedido #{selected.numero_pedido ?? 'sem número'}</h2>
               <p className="mt-1 truncate text-sm text-gray-500">{selected.cliente ?? 'Cliente não informado'}</p>
             </div>
-            <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={onClose}>
+            <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={requestClose}>
               <X size={18} />
             </button>
           </div>
@@ -606,6 +631,40 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
                 {selected.proxima_acao && <p className="mt-2 text-blue-700">Próxima ação: {selected.proxima_acao}</p>}
               </div>
             </section>
+
+            {showPedido && (
+              <section className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <PackageSearch size={16} className="text-blue-600" />
+                  <h3 className="text-sm font-semibold text-blue-950">Pedido no PCP</h3>
+                </div>
+                {loadingPedido ? (
+                  <div className="grid place-items-center py-8 text-blue-500">
+                    <LoaderCircle className="animate-spin" />
+                  </div>
+                ) : pedido ? (
+                  <div className="space-y-3">
+                    <PedidoResumo pedido={pedido} compact />
+                    <div className="overflow-hidden rounded-xl border border-blue-100 bg-white">
+                      <div className="border-b border-blue-50 px-3 py-2 text-xs font-semibold text-blue-900">Produtos do pedido</div>
+                      <div className="divide-y divide-blue-50">
+                        {pedido.itens.map(item => (
+                          <div key={item.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-semibold text-gray-900">{item.descricao_produto ?? 'Produto sem nome'}</p>
+                              <p className="text-xs text-gray-400">ERP {item.codigo_produto ?? '-'} - Qtd {item.quantidade ?? '-'}</p>
+                            </div>
+                            <span className="text-xs font-semibold text-gray-600">{money(item.valor_total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="py-4 text-sm text-blue-800">Pedido não encontrado no PCP.</p>
+                )}
+              </section>
+            )}
 
             {(selected.reembolso_valor || selected.reembolso_motivo || showReembolso) && (
               <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
@@ -685,11 +744,11 @@ function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus,
               </button>
               <button
                 type="button"
-                onClick={onConsultPcp}
+                onClick={viewPedido}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:border-gray-300"
               >
-                <ExternalLink size={13} />
-                PCP
+                <PackageSearch size={13} />
+                Visualizar pedido
               </button>
             </section>
 
@@ -732,6 +791,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   onClose: () => void
   onSaved: (data: Atendimento) => void
 }) {
+  const [closing, setClosing] = useState(false)
   const [step, setStep] = useState(1)
   const [codigoBusca, setCodigoBusca] = useState('')
   const [pedido, setPedido] = useState<PcpPedido | null>(null)
@@ -739,6 +799,12 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   const [form, setForm] = useState<WizardForm>(emptyWizard)
   const [loadingPedido, setLoadingPedido] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  function requestClose() {
+    if (closing) return
+    setClosing(true)
+    window.setTimeout(onClose, 180)
+  }
 
   function update(key: keyof WizardForm, value: string) {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -841,8 +907,8 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   }
 
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-gray-950/30 p-4 backdrop-blur-sm" onMouseDown={onClose}>
-      <div className="max-h-full w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
+    <div className={`${closing ? 'drawer-backdrop-out' : 'drawer-backdrop-in'} fixed inset-0 z-40 grid place-items-center bg-gray-950/30 p-4 backdrop-blur-sm`} onMouseDown={requestClose}>
+      <div className={`${closing ? 'modal-panel-out' : 'modal-panel-in'} max-h-full w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-2xl`} onMouseDown={event => event.stopPropagation()}>
         <div className="flex items-center gap-3 border-b border-gray-100 p-5">
           <div>
             <h2 className="text-lg font-bold text-gray-950">Novo atendimento</h2>
@@ -853,7 +919,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
             </div>
           </div>
           <div className="flex-1" />
-          <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={onClose}>
+          <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={requestClose}>
             <X size={18} />
           </button>
         </div>
@@ -1040,15 +1106,15 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   )
 }
 
-function PedidoResumo({ pedido }: { pedido: PcpPedido }) {
+function PedidoResumo({ pedido, compact = false }: { pedido: PcpPedido; compact?: boolean }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+    <div className={`${compact ? 'border-blue-100 bg-white' : 'border-gray-200 bg-gray-50'} rounded-2xl border p-4`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-lg font-bold text-gray-950">#{pedido.codigo_venda}</span>
         {pedido.situacao_erp && <StatusBadge status={pedido.situacao_erp} />}
         {pedido.financeiro_bloqueado && <span className="rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white">Pendente financeiro</span>}
       </div>
-      <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`mt-3 grid gap-3 text-sm sm:grid-cols-2 ${compact ? '' : 'lg:grid-cols-4'}`}>
         <Info label="ID cliente" value={pedido.codigo_cliente} />
         <Info label="Cliente" value={pedido.nome_cliente} />
         <Info label="Vendedor" value={pedido.vendedor} />

@@ -309,15 +309,23 @@ export function AgendaPage() {
 }
 
 function AgendaDetail({ item, loading, onClose }: { item: Atendimento; loading: boolean; onClose: () => void }) {
+  const [closing, setClosing] = useState(false)
+
+  function requestClose() {
+    if (closing) return
+    setClosing(true)
+    window.setTimeout(onClose, 180)
+  }
+
   return (
-    <div className="drawer-backdrop-in fixed inset-0 z-30 bg-gray-950/30 p-4 backdrop-blur-sm" onMouseDown={onClose}>
-      <div className="drawer-panel-in ml-auto h-full w-full max-w-xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
+    <div className={`${closing ? 'drawer-backdrop-out' : 'drawer-backdrop-in'} fixed inset-0 z-30 bg-gray-950/30 p-4 backdrop-blur-sm`} onMouseDown={requestClose}>
+      <div className={`${closing ? 'drawer-panel-out' : 'drawer-panel-in'} ml-auto h-full w-full max-w-xl overflow-y-auto rounded-2xl bg-white shadow-2xl`} onMouseDown={event => event.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-start gap-3 border-b border-gray-100 bg-white p-5">
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-xl font-bold text-gray-950">Pedido #{item.numero_pedido ?? 'sem número'}</h2>
             <p className="mt-1 truncate text-sm text-gray-500">{item.cliente ?? 'Cliente não informado'}</p>
           </div>
-          <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={onClose}>
+          <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={requestClose}>
             <X size={18} />
           </button>
         </div>
