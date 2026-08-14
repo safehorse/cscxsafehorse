@@ -31,7 +31,7 @@ import { DateTimePicker } from '../components/DateTimePicker'
 import { UserNameButton } from '../components/UserNameButton'
 import { api, type AtendimentoFilters } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
-import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, PcpPedidoItem, PcpPedidoResumo } from '../lib/types'
+import type { Atendimento, CadastroOptions, ClienteSugestao, DashboardData, PcpPedido, PcpPedidoItem, PcpPedidoResumo, ProdutoSugestao } from '../lib/types'
 
 const STATUS_OPTIONS = ['ABERTO', 'AGUARDANDO DEVOLUÇÃO', 'FINALIZADO', 'EM ANÁLISE', 'EM PRODUÇÃO', 'CRÉDITO GERADO', 'TROCA GERADA']
 const PRIORIDADES = ['baixa', 'normal', 'alta', 'urgente'] as const
@@ -60,7 +60,7 @@ const emptyWizard = {
   agendado_para: '',
 }
 
-type WizardForm = typeof emptyWizard
+export type WizardForm = typeof emptyWizard
 
 type DashboardMode = 'dashboard' | 'chamados'
 
@@ -587,7 +587,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
   )
 }
 
-function DetailDrawer({ selected, loading, note, setNote, getToken, cadastros, onCadastroChanged, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido }: {
+export function DetailDrawer({ selected, loading, note, setNote, getToken, cadastros, onCadastroChanged, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido }: {
   selected: Atendimento
   loading: boolean
   note: string
@@ -1004,8 +1004,12 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   const [step, setStep] = useState(1)
   const [codigoBusca, setCodigoBusca] = useState('')
   const [semNumero, setSemNumero] = useState(false)
-  const [buscaCliente, setBuscaCliente] = useState('')
-  const [buscaProduto, setBuscaProduto] = useState('')
+  const [clienteQuery, setClienteQuery] = useState('')
+  const [clienteSugestoes, setClienteSugestoes] = useState<ClienteSugestao[]>([])
+  const [selectedClientes, setSelectedClientes] = useState<ClienteSugestao[]>([])
+  const [produtoQuery, setProdutoQuery] = useState('')
+  const [produtoSugestoes, setProdutoSugestoes] = useState<ProdutoSugestao[]>([])
+  const [selectedProduto, setSelectedProduto] = useState<ProdutoSugestao | null>(null)
   const [resultadosBusca, setResultadosBusca] = useState<PcpPedidoResumo[]>([])
   const [loadingResultados, setLoadingResultados] = useState(false)
   const [previewPedido, setPreviewPedido] = useState<PcpPedido | null>(null)
@@ -1109,12 +1113,12 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   }
 
   async function buscarPorClienteProduto() {
-    if (!buscaCliente.trim() && !buscaProduto.trim()) return
+    if (!selectedClientes.length && !selectedProduto) return
     setLoadingResultados(true)
     try {
       const { data } = await api.pcpBuscarPedidos(getToken, {
-        cliente: buscaCliente.trim() || undefined,
-        produto: buscaProduto.trim() || undefined,
+        clientes: selectedClientes.map(item => item.codigo_cliente),
+        produtoId: selectedProduto?.id,
       })
       setResultadosBusca(data)
       if (!data.length) toast.warning('Nenhum pedido encontrado.')
@@ -1123,6 +1127,51 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
     } finally {
       setLoadingResultados(false)
     }
+  }
+
+  async function buscarClienteSugestoes(term: string) {
+    setClienteQuery(term)
+    if (term.trim().length < 2) {
+      setClienteSugestoes([])
+      return
+    }
+    try {
+      const { data } = await api.buscarClientesSugestao(getToken, term)
+      setClienteSugestoes(data.filter(item => !selectedClientes.some(sel => sel.codigo_cliente === item.codigo_cliente)))
+    } catch {
+      setClienteSugestoes([])
+    }
+  }
+
+  function addCliente(item: ClienteSugestao) {
+    setSelectedClientes(prev => [...prev, item])
+    setClienteQuery('')
+    setClienteSugestoes([])
+  }
+
+  function removeCliente(codigoCliente: string) {
+    setSelectedClientes(prev => prev.filter(item => item.codigo_cliente !== codigoCliente))
+  }
+
+  async function buscarProdutoSugestoes(term: string) {
+    setProdutoQuery(term)
+    setSelectedProduto(null)
+    if (term.trim().length < 2) {
+      setProdutoSugestoes([])
+      return
+    }
+    try {
+      const { data } = await api.buscarProdutosSugestao(getToken, term)
+      setProdutoSugestoes(data)
+    } catch {
+      setProdutoSugestoes([])
+    }
+  }
+
+  function selectProduto(item: ProdutoSugestao) {
+    setSelectedProduto(item)
+    setProdutoQuery(item.nome)
+    setProdutoSugestoes([])
   }
 
   async function createCadastro(kind: 'setor' | 'responsavel' | 'proxima_acao') {
@@ -1183,15 +1232,18 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
         <div className="p-5">
           {step === 1 && (
             <div className="space-y-5">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-600">
-                <input
-                  type="checkbox"
-                  checked={semNumero}
-                  onChange={event => setSemNumero(event.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-400"
-                />
-                Não sei o número do pedido
-              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={semNumero}
+                  onClick={() => setSemNumero(prev => !prev)}
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${semNumero ? 'bg-blue-600' : 'bg-gray-200'}`}
+                >
+                  <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${semNumero ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                </button>
+                <span className="text-sm font-medium text-gray-600">Não sei o número do pedido</span>
+              </div>
 
               {!semNumero ? (
                 <div className="flex gap-2">
@@ -1217,21 +1269,66 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="flex flex-wrap gap-2 sm:flex-nowrap">
-                    <input
-                      value={buscaCliente}
-                      onChange={event => setBuscaCliente(event.target.value)}
-                      onKeyDown={event => { if (event.key === 'Enter') buscarPorClienteProduto() }}
-                      placeholder="Cliente (nome ou código)"
-                      className="h-11 min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                    />
-                    <input
-                      value={buscaProduto}
-                      onChange={event => setBuscaProduto(event.target.value)}
-                      onKeyDown={event => { if (event.key === 'Enter') buscarPorClienteProduto() }}
-                      placeholder="Produto"
-                      className="h-11 min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                    />
+                  <div className="flex flex-wrap gap-2 sm:flex-nowrap sm:items-start">
+                    <div className="relative min-w-0 flex-1">
+                      {selectedClientes.length > 0 && (
+                        <div className="mb-1.5 flex flex-wrap gap-1.5">
+                          {selectedClientes.map(item => (
+                            <span key={item.codigo_cliente} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 py-1 pl-2.5 pr-1.5 text-xs font-semibold text-blue-700">
+                              {item.cliente ?? item.codigo_cliente}
+                              <button type="button" onClick={() => removeCliente(item.codigo_cliente)} className="rounded hover:bg-blue-100">
+                                <X size={12} />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <input
+                        value={clienteQuery}
+                        onChange={event => buscarClienteSugestoes(event.target.value)}
+                        placeholder="Buscar cliente..."
+                        className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                      />
+                      {clienteSugestoes.length > 0 && (
+                        <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-10 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+                          {clienteSugestoes.map(item => (
+                            <button
+                              key={item.codigo_cliente}
+                              type="button"
+                              onMouseDown={event => event.preventDefault()}
+                              onClick={() => addCliente(item)}
+                              className="flex w-full items-center justify-between gap-2 border-b border-gray-100 px-3 py-2 text-left text-sm last:border-0 hover:bg-blue-50"
+                            >
+                              <span className="min-w-0 truncate font-medium text-gray-900">{item.cliente ?? item.codigo_cliente}</span>
+                              <span className="shrink-0 text-xs text-gray-400">{item.codigo_cliente}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="relative min-w-0 flex-1">
+                      <input
+                        value={produtoQuery}
+                        onChange={event => buscarProdutoSugestoes(event.target.value)}
+                        placeholder="Buscar produto..."
+                        className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                      />
+                      {produtoSugestoes.length > 0 && (
+                        <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-10 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+                          {produtoSugestoes.map(item => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onMouseDown={event => event.preventDefault()}
+                              onClick={() => selectProduto(item)}
+                              className="block w-full truncate border-b border-gray-100 px-3 py-2 text-left text-sm font-medium text-gray-900 last:border-0 hover:bg-blue-50"
+                            >
+                              {item.nome}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={buscarPorClienteProduto}
@@ -1844,7 +1941,7 @@ function compactJoin(values: Array<string | null | undefined>, separator: string
     .join(separator)
 }
 
-function formToPayload(form: WizardForm) {
+export function formToPayload(form: WizardForm) {
   return {
     ...form,
     quantidade: form.quantidade ? Number(form.quantidade) : null,

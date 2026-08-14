@@ -20,7 +20,8 @@ import logoSrc from '../assets/logo.png'
 import { UserNameButton } from '../components/UserNameButton'
 import { api } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
-import type { Atendimento } from '../lib/types'
+import type { Atendimento, CadastroOptions } from '../lib/types'
+import { DetailDrawer, formToPayload, type WizardForm } from './DashboardPage'
 
 const DEFAULT_STATUS_ORDER = [
   'ABERTO',
@@ -48,6 +49,10 @@ export function KanbanPage() {
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null)
   const boardScrollRef = useRef<HTMLDivElement>(null)
   const autoScrollRef = useRef<number | null>(null)
+  const [cadastros, setCadastros] = useState<CadastroOptions>({ setores: [], responsaveis: [], proximasAcoes: [] })
+  const [selected, setSelected] = useState<Atendimento | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [note, setNote] = useState('')
 
   const statuses = useMemo(() => {
     const found = unique(items.map(item => item.status).filter(Boolean))
@@ -88,6 +93,96 @@ export function KanbanPage() {
       toast.error(error instanceof Error ? error.message : 'Falha ao carregar Kanban.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function reloadCadastros() {
+    try {
+      setCadastros(await api.cadastros(getToken))
+    } catch {
+      // A lista continua funcionando com o cache atual.
+    }
+  }
+
+  async function openDetail(id: string) {
+    setDetailLoading(true)
+    try {
+      const { data } = await api.atendimento(getToken, id)
+      setSelected(data)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao abrir atendimento.')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  async function saveStatus(nextStatus: string) {
+    if (!selected) return
+    try {
+      const isDone = ['FINALIZADO', 'CONCLUIDO'].includes(nextStatus)
+      const { data } = await api.updateAtendimento(getToken, selected.id, {
+        status: nextStatus,
+        concluido_em: isDone ? selected.concluido_em ?? new Date().toISOString() : null,
+      })
+      setSelected(prev => prev ? { ...prev, ...data } : data)
+      setItems(prev => prev.map(item => item.id === data.id ? { ...item, ...data } : item))
+      toast.success('Status atualizado.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao atualizar.')
+    }
+  }
+
+  async function saveReembolso(valor: number | null, motivo: string) {
+    if (!selected) return
+    try {
+      const hasRefund = valor !== null || motivo.trim()
+      const { data } = await api.updateAtendimento(getToken, selected.id, {
+        reembolso_valor: valor,
+        reembolso_motivo: motivo.trim() || null,
+        reembolso_em: hasRefund ? selected.reembolso_em ?? new Date().toISOString() : null,
+      })
+      setSelected(prev => prev ? { ...prev, ...data } : data)
+      setItems(prev => prev.map(item => item.id === data.id ? { ...item, ...data } : item))
+      toast.success('Reembolso salvo.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao salvar reembolso.')
+    }
+  }
+
+  async function saveAtendimentoChanges(id: string, form: WizardForm) {
+    try {
+      const { data } = await api.updateAtendimento(getToken, id, formToPayload(form))
+      setSelected(prev => prev ? { ...prev, ...data } : data)
+      setItems(prev => prev.map(item => item.id === data.id ? { ...item, ...data } : item))
+      toast.success('Chamado atualizado.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao salvar chamado.')
+      throw error
+    }
+  }
+
+  async function addNote() {
+    if (!selected || !note.trim()) return
+    try {
+      await api.addInteracao(getToken, selected.id, { tipo: 'nota', descricao: note.trim() })
+      setNote('')
+      await openDetail(selected.id)
+      toast.success('Histórico atualizado.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao salvar nota.')
+    }
+  }
+
+  async function loadPedidoFromPcp() {
+    if (!selected?.numero_pedido) return null
+    try {
+      const { data } = await api.pcpPedido(getToken, selected.numero_pedido)
+      if (!data) toast.warning('Pedido não encontrado no PCP.')
+      else toast.success('Pedido encontrado no PCP.')
+      return data
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao consultar PCP.')
+      return null
     }
   }
 
@@ -170,6 +265,7 @@ export function KanbanPage() {
 
   useEffect(() => {
     load()
+    reloadCadastros()
   }, [])
 
   useEffect(() => stopAutoScroll, [])
@@ -332,9 +428,10 @@ export function KanbanPage() {
                           </div>
                         ) : (
                           rows.map(item => (
-                            <Link
+                            <button
                               key={item.id}
-                              to={`/chamados?abrir=${item.id}`}
+                              type="button"
+                              onClick={() => openDetail(item.id)}
                               draggable
                               onDragStart={event => {
                                 event.dataTransfer.effectAllowed = 'move'
@@ -345,7 +442,7 @@ export function KanbanPage() {
                                 setDragOverStatus(null)
                                 stopAutoScroll()
                               }}
-                              className={`block cursor-grab rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 active:cursor-grabbing ${draggingItemId === item.id ? 'opacity-40' : ''}`}
+                              className={`block w-full cursor-grab rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 active:cursor-grabbing ${draggingItemId === item.id ? 'opacity-40' : ''}`}
                             >
                               <div className="mb-2 flex items-start justify-between gap-2">
                                 <p className="min-w-0 truncate text-sm font-bold text-gray-950">#{item.numero_pedido ?? 'sem pedido'}</p>
@@ -365,7 +462,7 @@ export function KanbanPage() {
                                 <span className="truncate">{item.responsavel ?? 'Sem responsável'}</span>
                                 <span>{date(item.data_solicitacao)}</span>
                               </div>
-                            </Link>
+                            </button>
                           ))
                         )}
                       </div>
@@ -377,6 +474,24 @@ export function KanbanPage() {
           )}
         </div>
       </main>
+
+      {selected && (
+        <DetailDrawer
+          selected={selected}
+          loading={detailLoading}
+          note={note}
+          setNote={setNote}
+          getToken={getToken}
+          cadastros={cadastros}
+          onCadastroChanged={reloadCadastros}
+          onClose={() => setSelected(null)}
+          onSaveStatus={saveStatus}
+          onSaveAtendimento={saveAtendimentoChanges}
+          onSaveReembolso={saveReembolso}
+          onAddNote={addNote}
+          onLoadPedido={loadPedidoFromPcp}
+        />
+      )}
     </div>
   )
 }

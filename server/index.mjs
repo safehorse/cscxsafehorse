@@ -795,6 +795,25 @@ app.get('/api/whatsapp/clientes', asyncRoute(async (req, res) => {
   res.json({ data: rows })
 }))
 
+app.get('/api/pcp/produtos', asyncRoute(async (req, res) => {
+  if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
+  const search = sanitizePostgrestTerm(req.query.search)
+  if (search.length < 2) return res.json({ data: [] })
+  const params = new URLSearchParams({
+    select: 'id,nome',
+    nome: `ilike.*${search}*`,
+    excluido_erp: 'is.false',
+    order: 'nome.asc',
+    limit: '12',
+  })
+  const response = await fetch(`${PCP_API_URL}/rest/v1/produtos?${params.toString()}`, {
+    headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) return res.status(response.status).json({ error: data?.message || 'Falha ao buscar produtos.' })
+  res.json({ data: Array.isArray(data) ? data.map(row => ({ id: row.id, nome: row.nome })) : [] })
+}))
+
 app.get('/api/pcp/pedidos/:codigo', asyncRoute(async (req, res) => {
   if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
   const codigo = encodeURIComponent(normalizePedidoCodigo(req.params.codigo))
@@ -833,19 +852,22 @@ function sanitizePostgrestTerm(value) {
 
 app.get('/api/pcp/pedidos', asyncRoute(async (req, res) => {
   if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
-  const cliente = sanitizePostgrestTerm(req.query.cliente)
-  const produto = sanitizePostgrestTerm(req.query.produto)
-  if (!cliente && !produto) return res.json({ data: [] })
+  const clientes = String(req.query.clientes || '')
+    .split(',')
+    .map(item => sanitizePostgrestTerm(item))
+    .filter(Boolean)
+  const produtoId = sanitizePostgrestTerm(req.query.produtoId)
+  if (!clientes.length && !produtoId) return res.json({ data: [] })
 
   const params = new URLSearchParams()
-  const select = produto
-    ? 'id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,situacao_erp,pedido_itens!inner(produto:produto_id!inner(nome))'
+  const select = produtoId
+    ? 'id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,situacao_erp,pedido_itens!inner(produto_id)'
     : 'id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,situacao_erp'
   params.set('select', select)
-  if (produto) params.set('pedido_itens.produto.nome', `ilike.*${produto}*`)
-  if (cliente) params.set('or', `(codigo_cliente.eq.${cliente},nome_cliente.ilike.*${cliente}*)`)
+  if (produtoId) params.set('pedido_itens.produto_id', `eq.${produtoId}`)
+  if (clientes.length) params.set('codigo_cliente', `in.(${clientes.join(',')})`)
   params.set('order', 'data_pedido.desc')
-  params.set('limit', '20')
+  params.set('limit', '30')
 
   const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?${params.toString()}`, {
     headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },

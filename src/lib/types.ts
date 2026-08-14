@@ -89,6 +89,17 @@ export interface CadastroOptions {
   proximasAcoes: string[]
 }
 
+export interface ClienteSugestao {
+  codigo_cliente: string
+  cliente: string | null
+  chamados: number
+}
+
+export interface ProdutoSugestao {
+  id: string
+  nome: string
+}
+
 export interface Cliente {
   codigo_cliente: string
   nome: string | null
