@@ -27,6 +27,30 @@
     return getSocketState() === 'CONNECTED'
   }
 
+  // O WhatsApp (multi-device) às vezes identifica uma conversa por um "LID"
+  // (id interno opaco, termina em @lid) em vez do número de telefone real
+  // (@c.us) - normalmente por privacidade. Nesse caso, o telefone de verdade
+  // precisa ser resolvido via WAWebLidMigrationUtils.toPn, senão a gente
+  // tenta "extrair telefone" de um número que não é telefone nenhum.
+  // Importante: tem que receber o Wid "cru" (ex: chat.id, msg.id.remote),
+  // não o resultado de .serialize() - esse já vira um objeto simples e perde
+  // os métodos internos que o toPn precisa.
+  function resolveTelefoneFromWid(wid) {
+    const serialized = typeof wid === 'string' ? wid : wid?._serialized
+    if (!serialized) return null
+    if (!serialized.endsWith('@lid')) return serialized.split('@')[0]
+    try {
+      const { toPn } = window.require('WAWebLidMigrationUtils')
+      const pn = toPn(wid)
+      const pnSerialized = pn?._serialized || (typeof pn === 'string' ? pn : null)
+      if (pnSerialized) return pnSerialized.split('@')[0]
+      post('log', `toPn não resolveu telefone para lid ${serialized}`)
+    } catch (error) {
+      post('log', `resolveTelefoneFromWid falhou para ${serialized}: ${error?.message}`)
+    }
+    return null
+  }
+
   function serializeChat(chat) {
     try {
       const data = chat.serialize ? chat.serialize() : chat
@@ -36,6 +60,7 @@
         id,
         nome: data.formattedTitle || data.name || null,
         unreadCount: Number(data.unreadCount) || 0,
+        telefone: resolveTelefoneFromWid(chat.id),
       }
     } catch {
       return null
@@ -56,6 +81,7 @@
         body: data.body || '',
         type: data.type || 'chat',
         timestamp: data.t ? new Date(data.t * 1000).toISOString() : null,
+        telefone: resolveTelefoneFromWid(msg.id?.remote || remote),
       }
     } catch {
       return null

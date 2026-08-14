@@ -144,8 +144,11 @@ async function onActiveChat(chat) {
   render()
   if (!chat?.id) return
   try {
-    const nomeQs = chat?.nome ? `?nome=${encodeURIComponent(chat.nome)}` : ''
-    const data = await apiFetch(`/api/whatsapp/chats/${encodeURIComponent(chat.id)}/messages${nomeQs}`)
+    const params = new URLSearchParams()
+    if (chat?.nome) params.set('nome', chat.nome)
+    if (chat?.telefone) params.set('telefone', chat.telefone)
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    const data = await apiFetch(`/api/whatsapp/chats/${encodeURIComponent(chat.id)}/messages${qs}`)
     state.contato = data?.contato || null
     state.chamados = data?.chamados || []
     state.codigoCliente = data?.contato?.codigo_cliente || ''

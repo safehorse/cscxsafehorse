@@ -639,7 +639,7 @@ app.post('/api/whatsapp/extensao/chats', asyncRoute(async (req, res) => {
   if (req.auth.type !== 'extensao') return res.status(403).json({ error: 'Somente a extensão pode chamar esta rota.' })
   const chats = Array.isArray(req.body.chats) ? req.body.chats : []
   for (const chat of chats.slice(0, 200)) {
-    const telefone = phoneFromWhatsappId(chat.id)
+    const telefone = phoneFromWhatsappId(chat.telefone) || phoneFromWhatsappId(chat.id)
     if (!telefone) continue
     await upsertWhatsappContato({
       whatsappId: chat.id,
@@ -659,7 +659,7 @@ app.post('/api/whatsapp/extensao/mensagens', asyncRoute(async (req, res) => {
   let salvas = 0
   for (const message of mensagens.slice(0, 200)) {
     const whatsappId = message.chatId
-    const telefone = phoneFromWhatsappId(whatsappId)
+    const telefone = phoneFromWhatsappId(message.telefone) || phoneFromWhatsappId(whatsappId)
     if (!telefone || !message.id) continue
     const contato = await upsertWhatsappContato({
       whatsappId,
@@ -709,19 +709,24 @@ app.get('/api/whatsapp/chats', asyncRoute(async (_req, res) => {
 
 app.get('/api/whatsapp/chats/:chatId/messages', asyncRoute(async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit || 40), 5), 80)
+  const explicitTelefone = phoneFromWhatsappId(req.query.telefone) || null
   const { rows: contatoRows } = await pool.query(
     'select * from cscx_whatsapp_contatos where whatsapp_id = $1',
     [req.params.chatId],
   )
   let saved = contatoRows[0]
   if (!saved) {
-    const telefone = phoneFromWhatsappId(req.params.chatId)
+    // Chats identificados por @lid não trazem o telefone real no próprio id -
+    // a extensão resolve via WAWebLidMigrationUtils.toPn e manda em ?telefone=.
+    const telefone = explicitTelefone || phoneFromWhatsappId(req.params.chatId)
     if (!telefone) return res.json({ data: { contato: null, mensagens: [], chamados: [] } })
     saved = await upsertWhatsappContato({
       whatsappId: req.params.chatId,
       telefone,
       nome: stringOrNull(req.query.nome),
     })
+  } else if (explicitTelefone && explicitTelefone !== saved.telefone) {
+    saved = await reconcileWhatsappContatoTelefone(saved, explicitTelefone)
   }
   if (!saved.codigo_cliente) {
     const matched = await matchClienteByTelefone(saved.telefone)
@@ -1299,6 +1304,15 @@ async function upsertWhatsappContato({ whatsappId, telefone, nome, lastMessageAt
     error.status = 400
     throw error
   }
+  // Se já existe um contato com esse whatsapp_id mas telefone diferente
+  // (linha antiga, gravada antes de resolver o telefone real de um @lid),
+  // reconcilia antes do upsert - senão o insert abaixo bate de frente com a
+  // constraint unique(whatsapp_id) e quebra o loop de sincronização inteiro.
+  const { rows: staleRows } = await pool.query(
+    'select * from cscx_whatsapp_contatos where whatsapp_id = $1 and telefone <> $2',
+    [whatsappId, cleanedPhone],
+  )
+  if (staleRows[0]) await reconcileWhatsappContatoTelefone(staleRows[0], cleanedPhone)
   const { rows } = await pool.query(`
     insert into cscx_whatsapp_contatos (telefone, whatsapp_id, nome, last_message_at, last_message, unread_count)
     values ($1, $2, $3, $4, $5, coalesce($6, 0))
@@ -1316,6 +1330,34 @@ async function upsertWhatsappContato({ whatsappId, telefone, nome, lastMessageAt
     if (matched) return linkWhatsappContatoCliente(contato.id, matched.codigo_cliente, matched.nome)
   }
   return contato
+}
+
+// Corrige o telefone de um contato já existente quando a extensão resolve um
+// telefone real diferente do que tinha sido gravado antes (caso @lid, onde o
+// telefone só é conhecido depois que WAWebLidMigrationUtils.toPn roda no
+// navegador). Se já existir outro contato com esse telefone (ex.: criado via
+// sync de cliente), funde as mensagens nele em vez de duplicar.
+async function reconcileWhatsappContatoTelefone(saved, telefone) {
+  const { rows: existingRows } = await pool.query(
+    'select * from cscx_whatsapp_contatos where telefone = $1',
+    [telefone],
+  )
+  const existing = existingRows[0]
+  if (!existing) {
+    const { rows } = await pool.query(
+      'update cscx_whatsapp_contatos set telefone = $1 where id = $2 returning *',
+      [telefone, saved.id],
+    )
+    return rows[0]
+  }
+  if (existing.id === saved.id) return existing
+  await pool.query('update cscx_whatsapp_mensagens set contato_id = $1 where contato_id = $2', [existing.id, saved.id])
+  await pool.query('delete from cscx_whatsapp_contatos where id = $1', [saved.id])
+  const { rows } = await pool.query(
+    'update cscx_whatsapp_contatos set whatsapp_id = $1, nome = coalesce(nome, $2) where id = $3 returning *',
+    [saved.whatsapp_id, saved.nome, existing.id],
+  )
+  return rows[0]
 }
 
 async function matchClienteByTelefone(telefone) {
