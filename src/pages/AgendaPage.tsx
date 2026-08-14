@@ -14,12 +14,12 @@ import {
   MessageCircle,
   RefreshCw,
   Search,
-  User,
   UsersRound,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import logoSrc from '../assets/logo.png'
+import { UserNameButton } from '../components/UserNameButton'
 import { api } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
 import type { Atendimento } from '../lib/types'
@@ -154,10 +154,7 @@ export function AgendaPage() {
           >
             <UsersRound size={15} />
           </Link>
-          <div className="hidden items-center gap-2 rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-600 sm:flex">
-            <User size={15} className="text-gray-400" />
-            <span>{user?.fullName ?? user?.primaryEmailAddress?.emailAddress}</span>
-          </div>
+          <UserNameButton />
           <button
             type="button"
             onClick={() => signOut()}

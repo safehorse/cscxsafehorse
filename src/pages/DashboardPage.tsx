@@ -27,6 +27,7 @@ import {
 import { toast } from 'sonner'
 import logoSrc from '../assets/logo.png'
 import { DateTimePicker } from '../components/DateTimePicker'
+import { UserNameButton } from '../components/UserNameButton'
 import { api, type AtendimentoFilters } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
 import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, PcpPedidoItem } from '../lib/types'
@@ -260,6 +261,16 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
             <p className="text-xs text-gray-400">Sucesso do Cliente 2026</p>
           </div>
           <div className="flex-1" />
+          {isChamadosPage && (
+            <Link
+              to="/"
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+              title="Voltar ao dashboard"
+            >
+              <ArrowLeft size={15} />
+              Voltar
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => load()}
@@ -291,10 +302,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
           >
             <UsersRound size={15} />
           </Link>
-          <div className="hidden items-center gap-2 rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-600 sm:flex">
-            <User size={15} className="text-gray-400" />
-            <span>{user?.fullName ?? user?.primaryEmailAddress?.emailAddress}</span>
-          </div>
+          <UserNameButton />
           <button
             type="button"
             onClick={() => signOut()}

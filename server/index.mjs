@@ -311,6 +311,31 @@ app.post('/api/usuarios/me', asyncRoute(async (req, res) => {
   res.status(201).json({ data: rows[0] })
 }))
 
+app.patch('/api/usuarios/me', asyncRoute(async (req, res) => {
+  const nome = stringOrNull(req.body.nome)
+  if (!nome) return res.status(400).json({ error: 'Informe o nome.' })
+
+  const { rows } = await pool.query(`
+    update cscx_usuarios
+    set nome = $2
+    where clerk_user_id = $1
+    returning *
+  `, [getUserId(req), nome])
+
+  if (rows[0]) return res.json({ data: rows[0] })
+
+  const email = normalizeEmail(req.body.email)
+  if (!email) return res.status(404).json({ error: 'UsuÃ¡rio nÃ£o encontrado.' })
+
+  const inserted = await pool.query(`
+    insert into cscx_usuarios (clerk_user_id, email, nome, papel, ativo)
+    values ($1, $2, $3, 'cs', true)
+    returning *
+  `, [getUserId(req), email, nome])
+
+  res.status(201).json({ data: inserted.rows[0] })
+}))
+
 app.post('/api/usuarios', asyncRoute(async (req, res) => {
   const email = normalizeEmail(req.body.email)
   const nome = stringOrNull(req.body.nome)
@@ -597,7 +622,7 @@ app.get('/api/whatsapp/chats/:chatId/messages', asyncRoute(async (req, res) => {
 }))
 
 app.patch('/api/whatsapp/contatos/:id', asyncRoute(async (req, res) => {
-  const codigoCliente = stringOrNull(req.body.codigo_cliente ?? req.body.codigoCliente)
+  const codigoCliente = identifierOrNull(req.body.codigo_cliente ?? req.body.codigoCliente)
   const clienteNome = stringOrNull(req.body.cliente_nome ?? req.body.clienteNome)
   const observacao = stringOrNull(req.body.observacao)
   const { rows } = await pool.query(`
@@ -662,10 +687,10 @@ app.post('/api/import/planilha', asyncRoute(async (req, res) => {
 function atendimentoFromBody(body) {
   return {
     data_solicitacao: toDateOrNull(body.data_solicitacao ?? body.dataSolicitacao ?? body['DATA DA SOLI']),
-    numero_pedido: stringOrNull(body.numero_pedido ?? body.numeroPedido ?? body['Nº DO PEDIDO'] ?? body['N DO PEDIDO']),
-    codigo_cliente: stringOrNull(body.codigo_cliente ?? body.codigoCliente),
+    numero_pedido: identifierOrNull(body.numero_pedido ?? body.numeroPedido ?? body['Nº DO PEDIDO'] ?? body['N DO PEDIDO']),
+    codigo_cliente: identifierOrNull(body.codigo_cliente ?? body.codigoCliente),
     cliente: stringOrNull(body.cliente ?? body['CLIENTE']),
-    codigo_produto: stringOrNull(body.codigo_produto ?? body.codigoProduto ?? body['COD. PRODUTO']),
+    codigo_produto: identifierOrNull(body.codigo_produto ?? body.codigoProduto ?? body['COD. PRODUTO']),
     descricao_produto: stringOrNull(body.descricao_produto ?? body.descricaoProduto ?? body['DESCRICAO DO PRODUTO']),
     quantidade: toNumberOrNull(body.quantidade ?? body['QUANTIDADE']),
     valor_unitario: toNumberOrNull(body.valor_unitario ?? body.valorUnitario ?? body['VALOR UNITARIO']),
@@ -675,7 +700,7 @@ function atendimentoFromBody(body) {
     responsavel: stringOrNull(body.responsavel ?? body['RESPONSAVEL']),
     proxima_acao: stringOrNull(body.proxima_acao ?? body.proximaAcao ?? body['PROXIMA ACAO'] ?? body['RESOLUCAO COM CLIENTE']),
     status: normalizaStatus(body.status ?? body['STATUS'] ?? body['STATUS ACOMPANHAMENTO']),
-    novo_pedido: stringOrNull(body.novo_pedido ?? body.novoPedido ?? body['NOVO PEDIDO']),
+    novo_pedido: identifierOrNull(body.novo_pedido ?? body.novoPedido ?? body['NOVO PEDIDO']),
     cliente_tem_desconto: stringOrNull(body.cliente_tem_desconto ?? body.clienteTemDesconto ?? body['CLIENTE TEM DESCONTO']),
     vendedor: stringOrNull(body.vendedor ?? body['VENDEDOR']),
     descricao_situacao: stringOrNull(body.descricao_situacao ?? body.descricaoSituacao ?? body['DESCRICAO DA SITUACAO:'] ?? body['INFORMACOES GERAIS']),
@@ -695,11 +720,16 @@ function atendimentoFromBody(body) {
 
 function normalizePatchValue(field, value) {
   if (field === 'status') return normalizaStatus(value)
+  if (['numero_pedido', 'codigo_cliente', 'codigo_produto', 'novo_pedido'].includes(field)) return identifierOrNull(value)
   if (['quantidade', 'valor_unitario', 'valor_total', 'reembolso_valor'].includes(field)) return toNumberOrNull(value)
   if (field === 'data_solicitacao') return toDateOrNull(value)
   if (['agendado_para', 'concluido_em', 'reembolso_em'].includes(field)) return value || null
   if (field === 'pcp_payload') return value ?? null
   return stringOrNull(value)
+}
+
+function identifierOrNull(value) {
+  return stringOrNull(value)?.replace(/\.0+$/, '') ?? null
 }
 
 function stringOrNull(value) {
@@ -888,8 +918,8 @@ function normalizePcpPedido(row) {
 
   return {
     id: row.id,
-    codigo_venda: String(row.codigo_venda ?? ''),
-    codigo_cliente: stringOrNull(row.codigo_cliente ?? clientePayload.codigo),
+    codigo_venda: normalizePedidoCodigo(row.codigo_venda),
+    codigo_cliente: identifierOrNull(row.codigo_cliente ?? clientePayload.codigo),
     nome_cliente: stringOrNull(row.nome_cliente ?? clientePayload.nome),
     vendedor: stringOrNull(vendedorPayload.nome),
     data_pedido: row.data_pedido ?? null,
@@ -911,7 +941,7 @@ function normalizePcpItem(item, itemCount, pedidoValorTotal) {
   return {
     id: item.id,
     produto_id: item.produto_id ?? null,
-    codigo_produto: stringOrNull(produto?.id_erp),
+    codigo_produto: identifierOrNull(produto?.id_erp),
     descricao_produto: stringOrNull(produto?.nome),
     quantidade,
     valor_unitario: valorUnitario,

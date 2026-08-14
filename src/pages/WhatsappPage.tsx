@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useAuth, useClerk, useUser } from '@clerk/clerk-react'
+import { useAuth, useClerk } from '@clerk/clerk-react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -14,10 +14,10 @@ import {
   ShieldCheck,
   Smartphone,
   Unlink,
-  User,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import logoSrc from '../assets/logo.png'
+import { UserNameButton } from '../components/UserNameButton'
 import { api } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
 import type { Atendimento, WhatsappChat, WhatsappClienteSugestao, WhatsappContato, WhatsappMensagem, WhatsappStatus } from '../lib/types'
@@ -38,7 +38,6 @@ const initialStatus: WhatsappStatus = {
 
 export function WhatsappPage() {
   const { getToken } = useAuth()
-  const { user } = useUser()
   const { signOut } = useClerk()
   const [status, setStatus] = useState<WhatsappStatus>(initialStatus)
   const [chats, setChats] = useState<WhatsappChat[]>([])
@@ -210,10 +209,7 @@ export function WhatsappPage() {
           >
             <RefreshCw size={15} className={loadingChats || loadingStatus ? 'animate-spin' : ''} />
           </button>
-          <div className="hidden items-center gap-2 rounded-xl border border-white/10 px-3 py-1.5 text-sm text-gray-300 sm:flex">
-            <User size={15} className="text-gray-500" />
-            <span>{user?.fullName ?? user?.primaryEmailAddress?.emailAddress}</span>
-          </div>
+          <UserNameButton tone="dark" />
           <button
             type="button"
             onClick={() => signOut()}

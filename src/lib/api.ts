@@ -60,6 +60,9 @@ export const api = {
   syncUsuario: (getToken: () => Promise<string | null>, body: { email: string; nome?: string | null }) =>
     request<{ data: Usuario }>('/api/usuarios/me', getToken, { method: 'POST', body: JSON.stringify(body) }),
 
+  updateMeuUsuario: (getToken: () => Promise<string | null>, body: { nome: string; email?: string | null }) =>
+    request<{ data: Usuario }>('/api/usuarios/me', getToken, { method: 'PATCH', body: JSON.stringify(body) }),
+
   saveUsuario: (getToken: () => Promise<string | null>, body: { email: string; nome?: string | null; papel: 'admin' | 'cs'; ativo?: boolean }) =>
     request<{ data: Usuario }>('/api/usuarios', getToken, { method: 'POST', body: JSON.stringify(body) }),
 

@@ -91,6 +91,14 @@ export function DateTimePicker({ label, value, onChange }: DateTimePickerProps) 
               >
                 <ChevronRight size={15} />
               </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="grid h-8 w-8 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-100"
+                title="Fechar calendario"
+              >
+                <X size={15} />
+              </button>
             </div>
           </div>
 
@@ -157,7 +165,7 @@ export function DateTimePicker({ label, value, onChange }: DateTimePickerProps) 
                 Amanhã
               </button>
               <button type="button" onClick={() => setOpen(false)} className="rounded-xl bg-blue-600 px-2 py-2 text-xs font-semibold text-white hover:bg-blue-700">
-                Pronto
+                Fechar
               </button>
             </div>
           </div>

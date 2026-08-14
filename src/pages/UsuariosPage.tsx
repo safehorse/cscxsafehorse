@@ -11,12 +11,12 @@ import {
   MessageCircle,
   RefreshCw,
   ShieldCheck,
-  User,
   UserPlus,
   UsersRound,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import logoSrc from '../assets/logo.png'
+import { UserNameButton } from '../components/UserNameButton'
 import { api } from '../lib/api'
 import type { Usuario } from '../lib/types'
 
@@ -162,10 +162,7 @@ export function UsuariosPage() {
           >
             <RefreshCw size={15} />
           </button>
-          <div className="hidden items-center gap-2 rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-600 sm:flex">
-            <User size={15} className="text-gray-400" />
-            <span>{user?.fullName ?? user?.primaryEmailAddress?.emailAddress}</span>
-          </div>
+          <UserNameButton />
           <button
             type="button"
             onClick={() => signOut()}
