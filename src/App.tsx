@@ -7,7 +7,6 @@ import { DashboardPage } from './pages/DashboardPage'
 import { KanbanPage } from './pages/KanbanPage'
 import { LoginPage } from './pages/LoginPage'
 import { UsuariosPage } from './pages/UsuariosPage'
-import { WhatsappPage } from './pages/WhatsappPage'
 
 export default function App() {
   return (
@@ -31,12 +30,7 @@ export default function App() {
             <SignedOut><Navigate to="/login" replace /></SignedOut>
           </>
         } />
-        <Route path="/whatsapp" element={
-          <>
-            <SignedIn><WhatsappPage /></SignedIn>
-            <SignedOut><Navigate to="/login" replace /></SignedOut>
-          </>
-        } />
+        <Route path="/whatsapp" element={<Navigate to="/?whatsapp=1" replace />} />
         <Route path="/kanban" element={
           <>
             <SignedIn><KanbanPage /></SignedIn>

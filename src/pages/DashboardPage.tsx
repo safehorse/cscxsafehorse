@@ -29,6 +29,7 @@ import { toast } from 'sonner'
 import logoSrc from '../assets/logo.png'
 import { DateTimePicker } from '../components/DateTimePicker'
 import { UserNameButton } from '../components/UserNameButton'
+import { WhatsappConnectModal } from '../components/WhatsappConnectModal'
 import { api, type AtendimentoFilters } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
 import type { Atendimento, CadastroOptions, ClienteSugestao, DashboardData, PcpPedido, PcpPedidoItem, PcpPedidoResumo, ProdutoSugestao } from '../lib/types'
@@ -85,6 +86,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
   const [page, setPage] = useState(1)
   const [totalAtendimentos, setTotalAtendimentos] = useState(0)
   const [showCreate, setShowCreate] = useState(false)
+  const [showWhatsapp, setShowWhatsapp] = useState(false)
   const [note, setNote] = useState('')
   const filterParams = useMemo<AtendimentoFilters>(() => ({
     search,
@@ -141,6 +143,14 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
       setSearchParams(next, { replace: true })
     })
   }, [isChamadosPage, searchParams, setSearchParams])
+
+  useEffect(() => {
+    if (!searchParams.get('whatsapp')) return
+    setShowWhatsapp(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('whatsapp')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const totalPages = Math.max(1, Math.ceil(totalAtendimentos / PAGE_SIZE))
 
@@ -288,14 +298,15 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
             <UsersRound size={15} />
             Clientes
           </Link>
-          <Link
-            to="/whatsapp"
+          <button
+            type="button"
+            onClick={() => setShowWhatsapp(true)}
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
             title="WhatsApp"
           >
             <MessageSquareText size={15} />
             WhatsApp
-          </Link>
+          </button>
           <Link
             to="/kanban"
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100"
@@ -583,6 +594,8 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
           }}
         />
       )}
+
+      {showWhatsapp && <WhatsappConnectModal onClose={() => setShowWhatsapp(false)} />}
     </div>
   )
 }

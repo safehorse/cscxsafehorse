@@ -125,7 +125,7 @@ export function ClientesPage() {
             Chamados
           </Link>
           <Link
-            to="/whatsapp"
+            to="/?whatsapp=1"
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
           >
             <MessageSquareText size={15} />
