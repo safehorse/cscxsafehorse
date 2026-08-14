@@ -281,6 +281,14 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
             Chamados
           </Link>
           <Link
+            to="/clientes"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+            title="Clientes"
+          >
+            <UsersRound size={15} />
+            Clientes
+          </Link>
+          <Link
             to="/whatsapp"
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
             title="WhatsApp"
@@ -1000,6 +1008,8 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   const [buscaProduto, setBuscaProduto] = useState('')
   const [resultadosBusca, setResultadosBusca] = useState<PcpPedidoResumo[]>([])
   const [loadingResultados, setLoadingResultados] = useState(false)
+  const [previewPedido, setPreviewPedido] = useState<PcpPedido | null>(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
   const [pedido, setPedido] = useState<PcpPedido | null>(null)
   const [selectedItems, setSelectedItems] = useState<PcpPedidoItem[]>([])
   const [form, setForm] = useState<WizardForm>(emptyWizard)
@@ -1074,6 +1084,28 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
     } finally {
       setLoadingPedido(false)
     }
+  }
+
+  async function verPedido(codigoVenda: string) {
+    setLoadingPreview(true)
+    try {
+      const { data } = await api.pcpPedido(getToken, codigoVenda)
+      if (!data) {
+        toast.warning('Pedido não encontrado no PCP.')
+        return
+      }
+      setPreviewPedido(data)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao buscar pedido.')
+    } finally {
+      setLoadingPreview(false)
+    }
+  }
+
+  function usarPedidoPreview() {
+    if (!previewPedido) return
+    applyPedido(previewPedido)
+    setPreviewPedido(null)
   }
 
   async function buscarPorClienteProduto() {
@@ -1217,14 +1249,18 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
                         <button
                           key={item.id}
                           type="button"
-                          onClick={() => buscarPedido(item.codigo_venda)}
-                          className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-200 p-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50"
+                          onClick={() => verPedido(item.codigo_venda)}
+                          disabled={loadingPreview}
+                          className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-200 p-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50 disabled:opacity-60"
                         >
                           <div className="min-w-0">
                             <p className="truncate text-sm font-bold text-gray-950">#{item.codigo_venda} - {item.nome_cliente ?? 'Cliente sem nome'}</p>
                             <p className="text-xs text-gray-400">{date(item.data_pedido)} {item.situacao_erp ? `- ${item.situacao_erp}` : ''}</p>
                           </div>
-                          <ChevronRight size={16} className="shrink-0 text-gray-400" />
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-600">
+                            Ver pedido
+                            <ChevronRight size={14} />
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -1406,6 +1442,56 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
           )}
         </div>
       </div>
+
+      {previewPedido && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-gray-950/40 p-4 backdrop-blur-sm"
+          onMouseDown={event => { event.stopPropagation(); setPreviewPedido(null) }}
+        >
+          <div
+            className="w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            onMouseDown={event => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-gray-100 p-4">
+              <h3 className="text-sm font-bold text-gray-950">Detalhes do pedido</h3>
+              <button className="grid h-8 w-8 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={() => setPreviewPedido(null)}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-3 p-4">
+              <PedidoResumo pedido={previewPedido} compact />
+              {previewPedido.itens.length > 0 && (
+                <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200">
+                  {previewPedido.itens.map(item => (
+                    <div key={item.id} className="flex items-center gap-3 px-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-gray-900">{item.descricao_produto ?? 'Produto sem nome'}</p>
+                        <p className="text-xs text-gray-400">Qtd {item.quantidade ?? '-'}</p>
+                      </div>
+                      <span className="text-xs font-semibold text-gray-600">{money(item.valor_total)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-gray-100 p-4">
+              <button
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                onClick={() => setPreviewPedido(null)}
+              >
+                Fechar
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                onClick={usarPedidoPreview}
+              >
+                <CheckCircle2 size={15} />
+                Usar este pedido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

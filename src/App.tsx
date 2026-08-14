@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { SignedIn, SignedOut } from '@clerk/clerk-react'
 import { Toaster } from 'sonner'
 import { AgendaPage } from './pages/AgendaPage'
+import { ClientesPage } from './pages/ClientesPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { KanbanPage } from './pages/KanbanPage'
 import { LoginPage } from './pages/LoginPage'
@@ -45,6 +46,12 @@ export default function App() {
         <Route path="/usuarios" element={
           <>
             <SignedIn><UsuariosPage /></SignedIn>
+            <SignedOut><Navigate to="/login" replace /></SignedOut>
+          </>
+        } />
+        <Route path="/clientes" element={
+          <>
+            <SignedIn><ClientesPage /></SignedIn>
             <SignedOut><Navigate to="/login" replace /></SignedOut>
           </>
         } />

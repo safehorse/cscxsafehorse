@@ -1,6 +1,7 @@
 import type {
   Atendimento,
   CadastroOptions,
+  Cliente,
   DashboardData,
   PcpPedido,
   PcpPedidoResumo,
@@ -105,6 +106,17 @@ export const api = {
 
   pcpPedido: (getToken: () => Promise<string | null>, codigo: string) =>
     request<{ data: PcpPedido | null }>(`/api/pcp/pedidos/${encodeURIComponent(codigo)}`, getToken),
+
+  clientes: (getToken: () => Promise<string | null>, filters: { search?: string; page?: number; pageSize?: number } = {}) => {
+    const qs = new URLSearchParams()
+    if (filters.search) qs.set('search', filters.search)
+    if (filters.page) qs.set('page', String(filters.page))
+    if (filters.pageSize) qs.set('pageSize', String(filters.pageSize))
+    return request<{ data: Cliente[]; total: number; page: number; pageSize: number }>(`/api/clientes?${qs.toString()}`, getToken)
+  },
+
+  sincronizarClientes: (getToken: () => Promise<string | null>) =>
+    request<{ data: { total: number } }>('/api/clientes/sync', getToken, { method: 'POST' }),
 
   pcpPedidosCliente: (getToken: () => Promise<string | null>, codigoCliente: string) =>
     request<{ data: PcpPedido[] }>(`/api/pcp/clientes/${encodeURIComponent(codigoCliente)}/pedidos`, getToken),

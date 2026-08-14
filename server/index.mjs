@@ -869,6 +869,40 @@ app.post('/api/clientes/sync', asyncRoute(async (_req, res) => {
   res.json({ data: result })
 }))
 
+app.get('/api/clientes', asyncRoute(async (req, res) => {
+  const search = String(req.query.search || '').trim()
+  const requestedPage = Number(req.query.page || 1)
+  const requestedPageSize = Number(req.query.pageSize || 30)
+  const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1
+  const pageSize = Number.isFinite(requestedPageSize) ? Math.min(Math.max(requestedPageSize, 5), 100) : 30
+  const offset = (page - 1) * pageSize
+
+  const values = []
+  let whereSql = ''
+  if (search) {
+    values.push(`%${search}%`)
+    whereSql = `where c.codigo_cliente ilike $1 or c.nome ilike $1 or c.telefone ilike $1`
+  }
+
+  const countValues = [...values]
+  values.push(pageSize)
+  values.push(offset)
+
+  const [list, total] = await Promise.all([
+    pool.query(`
+      select c.codigo_cliente, c.nome, c.telefone,
+        (select count(*)::int from cscx_atendimentos a where a.codigo_cliente = c.codigo_cliente) as chamados
+      from cscx_clientes c
+      ${whereSql}
+      order by c.nome asc nulls last
+      limit $${values.length - 1}
+      offset $${values.length}
+    `, values),
+    pool.query(`select count(*)::int as total from cscx_clientes c ${whereSql}`, countValues),
+  ])
+  res.json({ data: list.rows, total: total.rows[0]?.total ?? 0, page, pageSize })
+}))
+
 function normalizePedidoCodigo(value) {
   return String(value || '').trim().replace(/\.0+$/, '')
 }
