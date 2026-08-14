@@ -1,0 +1,14 @@
+[Unit]
+Description=CS/CX Safe Horse API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/cscxsafehorse
+EnvironmentFile=/var/www/cscxsafehorse/.env
+ExecStart=/usr/bin/node server/index.mjs
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
