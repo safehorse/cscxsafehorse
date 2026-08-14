@@ -122,9 +122,8 @@ export function WhatsappPage() {
           </div>
 
           <p className="mb-4 rounded-xl bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-800">
-            O WhatsApp roda no seu computador, não no servidor. Depois de instalar e parear, o cliente ERP, os
-            chamados e os pedidos aparecem direto num painel dentro da própria aba do WhatsApp Web — não precisa
-            voltar nessa tela pra atender.
+            Depois de instalar e parear, aparece um painel do lado da conversa, direto na aba do WhatsApp Web,
+            mostrando o cliente, os chamados e os pedidos dele. Não precisa voltar nessa tela pra atender.
           </p>
 
           <div className="space-y-4">
