@@ -298,7 +298,10 @@ app.get('/api/pcp/pedidos/:codigo', asyncRoute(async (req, res) => {
   const data = await response.json().catch(() => [])
   if (!response.ok) return res.status(response.status).json({ error: data?.message || 'Falha ao consultar PCP.' })
   const pedido = Array.isArray(data) ? data[0] || null : data
-  res.json({ data: pedido ? normalizePcpPedido(pedido) : null })
+  if (!pedido) return res.json({ data: null })
+  const normalized = normalizePcpPedido(pedido)
+  await hydrateItemValuesFromHistory(normalized)
+  res.json({ data: normalized })
 }))
 
 app.post('/api/import/planilha', asyncRoute(async (req, res) => {
@@ -418,6 +421,30 @@ function normalizePcpItem(item, itemCount, pedidoValorTotal) {
     valor_unitario: valorUnitario,
     valor_total: valorTotal,
     obs: item.obs ?? null,
+  }
+}
+
+async function hydrateItemValuesFromHistory(pedido) {
+  if (!pedido?.codigo_venda || !pedido.itens?.length) return
+  const { rows } = await pool.query(`
+    select codigo_produto, descricao_produto, quantidade, valor_unitario, valor_total
+    from cscx_atendimentos
+    where numero_pedido = $1
+  `, [pedido.codigo_venda])
+  if (!rows.length) return
+
+  for (const item of pedido.itens) {
+    const codigo = String(item.codigo_produto ?? '').trim().toLowerCase()
+    const descricao = String(item.descricao_produto ?? '').trim().toLowerCase()
+    const match = rows.find(row => {
+      const rowCodigo = String(row.codigo_produto ?? '').trim().toLowerCase()
+      const rowDescricao = String(row.descricao_produto ?? '').trim().toLowerCase()
+      return (codigo && rowCodigo === codigo) || (descricao && rowDescricao === descricao)
+    })
+    if (!match) continue
+    item.quantidade = item.quantidade ?? toNumberOrNull(match.quantidade)
+    item.valor_unitario = item.valor_unitario ?? toNumberOrNull(match.valor_unitario)
+    item.valor_total = item.valor_total ?? toNumberOrNull(match.valor_total)
   }
 }
 
