@@ -1,4 +1,15 @@
-import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, Usuario } from './types'
+import type {
+  Atendimento,
+  CadastroOptions,
+  DashboardData,
+  PcpPedido,
+  Usuario,
+  WhatsappChat,
+  WhatsappClienteSugestao,
+  WhatsappContato,
+  WhatsappMensagem,
+  WhatsappStatus,
+} from './types'
 
 const API_URL = (import.meta.env.VITE_CSCX_API_URL as string || '').replace(/\/$/, '')
 
@@ -86,6 +97,27 @@ export const api = {
 
   pcpPedido: (getToken: () => Promise<string | null>, codigo: string) =>
     request<{ data: PcpPedido | null }>(`/api/pcp/pedidos/${encodeURIComponent(codigo)}`, getToken),
+
+  whatsappStatus: (getToken: () => Promise<string | null>) =>
+    request<{ data: WhatsappStatus }>('/api/whatsapp/status', getToken),
+
+  whatsappConnect: (getToken: () => Promise<string | null>) =>
+    request<{ data: WhatsappStatus }>('/api/whatsapp/connect', getToken, { method: 'POST' }),
+
+  whatsappDisconnect: (getToken: () => Promise<string | null>) =>
+    request<{ data: WhatsappStatus }>('/api/whatsapp/disconnect', getToken, { method: 'POST' }),
+
+  whatsappChats: (getToken: () => Promise<string | null>) =>
+    request<{ data: WhatsappChat[] }>('/api/whatsapp/chats', getToken),
+
+  whatsappMessages: (getToken: () => Promise<string | null>, chatId: string) =>
+    request<{ data: { contato: WhatsappContato; mensagens: WhatsappMensagem[]; chamados: Atendimento[] } }>(`/api/whatsapp/chats/${encodeURIComponent(chatId)}/messages`, getToken),
+
+  whatsappUpdateContato: (getToken: () => Promise<string | null>, id: string, body: { codigo_cliente: string | null; cliente_nome: string | null; observacao?: string | null }) =>
+    request<{ data: { contato: WhatsappContato; chamados: Atendimento[] } }>(`/api/whatsapp/contatos/${id}`, getToken, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  whatsappClientes: (getToken: () => Promise<string | null>, search: string) =>
+    request<{ data: WhatsappClienteSugestao[] }>(`/api/whatsapp/clientes?search=${encodeURIComponent(search)}`, getToken),
 }
 
 function buildAtendimentoQuery(filters: AtendimentoFilters) {

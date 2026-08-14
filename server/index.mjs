@@ -3,8 +3,11 @@ import express from 'express'
 import cors from 'cors'
 import pg from 'pg'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
+import qrcode from 'qrcode'
+import whatsappWeb from 'whatsapp-web.js'
 
 const { Pool } = pg
+const { Client: WhatsappClient, LocalAuth } = whatsappWeb
 
 const PORT = Number(process.env.PORT || 3001)
 const DATABASE_URL = process.env.DATABASE_URL
@@ -16,6 +19,7 @@ const PCP_API_URL = (process.env.PCP_API_URL || '').replace(/\/$/, '')
 const PCP_API_KEY = process.env.PCP_API_KEY || ''
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173'
 const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || CORS_ORIGIN.split(',')[0] || 'https://cscx.safehorse.com.br').replace(/\/$/, '')
+const WHATSAPP_SESSION_PATH = process.env.WHATSAPP_SESSION_PATH || '/opt/cscxsafehorse/whatsapp-session'
 
 if (!DATABASE_URL) {
   console.warn('DATABASE_URL não configurado. O servidor vai iniciar, mas as rotas de banco falharão.')
@@ -529,6 +533,101 @@ app.post('/api/agendamentos', asyncRoute(async (req, res) => {
   res.status(201).json({ data: rows[0] })
 }))
 
+app.get('/api/whatsapp/status', asyncRoute(async (_req, res) => {
+  res.json({ data: getWhatsappStatus() })
+}))
+
+app.post('/api/whatsapp/connect', asyncRoute(async (_req, res) => {
+  await ensureWhatsappClient()
+  res.json({ data: getWhatsappStatus() })
+}))
+
+app.post('/api/whatsapp/disconnect', asyncRoute(async (_req, res) => {
+  await disconnectWhatsapp()
+  res.json({ data: getWhatsappStatus() })
+}))
+
+app.get('/api/whatsapp/chats', asyncRoute(async (_req, res) => {
+  const client = getReadyWhatsappClient()
+  const chats = await client.getChats()
+  const rows = []
+  for (const chat of chats.filter(item => !item.isGroup).slice(0, 60)) {
+    const contact = await chat.getContact().catch(() => null)
+    const telefone = phoneFromWhatsappId(chat.id?._serialized)
+    const saved = await upsertWhatsappContato({
+      whatsappId: chat.id?._serialized,
+      telefone,
+      nome: contact?.pushname || contact?.name || chat.name || telefone,
+      lastMessageAt: chat.lastMessage?.timestamp ? new Date(chat.lastMessage.timestamp * 1000).toISOString() : null,
+    })
+    rows.push({
+      id: chat.id?._serialized,
+      telefone,
+      nome: saved.nome || contact?.pushname || contact?.name || chat.name || telefone,
+      codigo_cliente: saved.codigo_cliente,
+      cliente_nome: saved.cliente_nome,
+      unread_count: chat.unreadCount || 0,
+      last_message: chat.lastMessage?.body || '',
+      last_message_at: chat.lastMessage?.timestamp ? new Date(chat.lastMessage.timestamp * 1000).toISOString() : saved.last_message_at,
+    })
+  }
+  rows.sort((a, b) => String(b.last_message_at || '').localeCompare(String(a.last_message_at || '')))
+  res.json({ data: rows })
+}))
+
+app.get('/api/whatsapp/chats/:chatId/messages', asyncRoute(async (req, res) => {
+  const client = getReadyWhatsappClient()
+  const limit = Math.min(Math.max(Number(req.query.limit || 40), 5), 80)
+  const chat = await client.getChatById(req.params.chatId)
+  const messages = await chat.fetchMessages({ limit })
+  const contact = await chat.getContact().catch(() => null)
+  const telefone = phoneFromWhatsappId(chat.id?._serialized)
+  const saved = await upsertWhatsappContato({
+    whatsappId: chat.id?._serialized,
+    telefone,
+    nome: contact?.pushname || contact?.name || chat.name || telefone,
+    lastMessageAt: messages.at(-1)?.timestamp ? new Date(messages.at(-1).timestamp * 1000).toISOString() : null,
+  })
+  const rows = []
+  for (const message of messages) {
+    rows.push(await saveWhatsappMessage(saved.id, message))
+  }
+  const chamados = saved.codigo_cliente ? await findAtendimentosByCodigoCliente(saved.codigo_cliente) : []
+  res.json({ data: { contato: saved, mensagens: rows, chamados } })
+}))
+
+app.patch('/api/whatsapp/contatos/:id', asyncRoute(async (req, res) => {
+  const codigoCliente = stringOrNull(req.body.codigo_cliente ?? req.body.codigoCliente)
+  const clienteNome = stringOrNull(req.body.cliente_nome ?? req.body.clienteNome)
+  const observacao = stringOrNull(req.body.observacao)
+  const { rows } = await pool.query(`
+    update cscx_whatsapp_contatos
+    set codigo_cliente = $1,
+        cliente_nome = $2,
+        observacao = $3
+    where id = $4
+    returning *
+  `, [codigoCliente, clienteNome, observacao, req.params.id])
+  if (!rows[0]) return res.status(404).json({ error: 'Contato nÃ£o encontrado.' })
+  const chamados = rows[0].codigo_cliente ? await findAtendimentosByCodigoCliente(rows[0].codigo_cliente) : []
+  res.json({ data: { contato: rows[0], chamados } })
+}))
+
+app.get('/api/whatsapp/clientes', asyncRoute(async (req, res) => {
+  const search = String(req.query.search || '').trim()
+  if (search.length < 2) return res.json({ data: [] })
+  const { rows } = await pool.query(`
+    select codigo_cliente, max(cliente) as cliente, count(*)::int as chamados
+    from cscx_atendimentos
+    where codigo_cliente is not null
+      and (codigo_cliente ilike $1 or cliente ilike $1)
+    group by codigo_cliente
+    order by max(cliente) asc nulls last
+    limit 12
+  `, [`%${search}%`])
+  res.json({ data: rows })
+}))
+
 app.get('/api/pcp/pedidos/:codigo', asyncRoute(async (req, res) => {
   if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
   const codigo = encodeURIComponent(normalizePedidoCodigo(req.params.codigo))
@@ -843,6 +942,173 @@ async function hydrateItemValuesFromHistory(pedido) {
     item.valor_unitario = item.valor_unitario ?? toNumberOrNull(match.valor_unitario)
     item.valor_total = item.valor_total ?? toNumberOrNull(match.valor_total)
   }
+}
+
+let whatsappClient = null
+let whatsappState = {
+  status: 'desconectado',
+  qr: null,
+  erro: null,
+  connectedAt: null,
+  updatedAt: new Date().toISOString(),
+}
+
+function setWhatsappState(next) {
+  whatsappState = { ...whatsappState, ...next, updatedAt: new Date().toISOString() }
+}
+
+function getWhatsappStatus() {
+  return {
+    status: whatsappState.status,
+    qr: whatsappState.qr,
+    erro: whatsappState.erro,
+    connected_at: whatsappState.connectedAt,
+    updated_at: whatsappState.updatedAt,
+  }
+}
+
+async function ensureWhatsappClient() {
+  if (whatsappClient) return whatsappClient
+
+  setWhatsappState({ status: 'iniciando', erro: null })
+  whatsappClient = new WhatsappClient({
+    authStrategy: new LocalAuth({
+      clientId: 'cscx-safehorse',
+      dataPath: WHATSAPP_SESSION_PATH,
+    }),
+    puppeteer: {
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    },
+  })
+
+  whatsappClient.on('qr', async qr => {
+    const dataUrl = await qrcode.toDataURL(qr, { margin: 1, width: 320 })
+    setWhatsappState({ status: 'aguardando_qr', qr: dataUrl, erro: null })
+  })
+
+  whatsappClient.on('authenticated', () => {
+    setWhatsappState({ status: 'autenticado', qr: null, erro: null })
+  })
+
+  whatsappClient.on('ready', () => {
+    setWhatsappState({ status: 'conectado', qr: null, erro: null, connectedAt: new Date().toISOString() })
+  })
+
+  whatsappClient.on('auth_failure', message => {
+    setWhatsappState({ status: 'erro', erro: message || 'Falha na autenticaÃ§Ã£o do WhatsApp.' })
+  })
+
+  whatsappClient.on('disconnected', reason => {
+    setWhatsappState({ status: 'desconectado', qr: null, erro: reason || null, connectedAt: null })
+    whatsappClient = null
+  })
+
+  whatsappClient.on('message', async message => {
+    try {
+      if (message.fromMe || message.from?.endsWith('@g.us')) return
+      const chat = await message.getChat()
+      const contact = await message.getContact().catch(() => null)
+      const telefone = phoneFromWhatsappId(chat.id?._serialized || message.from)
+      const contato = await upsertWhatsappContato({
+        whatsappId: chat.id?._serialized || message.from,
+        telefone,
+        nome: contact?.pushname || contact?.name || chat.name || telefone,
+        lastMessageAt: message.timestamp ? new Date(message.timestamp * 1000).toISOString() : new Date().toISOString(),
+      })
+      await saveWhatsappMessage(contato.id, message)
+    } catch (error) {
+      console.error('Falha ao salvar mensagem WhatsApp:', error)
+    }
+  })
+
+  whatsappClient.initialize().catch(error => {
+    setWhatsappState({ status: 'erro', erro: error.message || 'Falha ao iniciar WhatsApp Web.' })
+    whatsappClient = null
+  })
+
+  return whatsappClient
+}
+
+function getReadyWhatsappClient() {
+  if (!whatsappClient || whatsappState.status !== 'conectado') {
+    const error = new Error('WhatsApp ainda nÃ£o conectado.')
+    error.status = 409
+    throw error
+  }
+  return whatsappClient
+}
+
+async function disconnectWhatsapp() {
+  if (!whatsappClient) {
+    setWhatsappState({ status: 'desconectado', qr: null, erro: null, connectedAt: null })
+    return
+  }
+  const client = whatsappClient
+  whatsappClient = null
+  await client.destroy().catch(() => null)
+  setWhatsappState({ status: 'desconectado', qr: null, erro: null, connectedAt: null })
+}
+
+function phoneFromWhatsappId(value) {
+  return String(value || '').split('@')[0].replace(/\D/g, '')
+}
+
+async function upsertWhatsappContato({ whatsappId, telefone, nome, lastMessageAt }) {
+  const cleanedPhone = phoneFromWhatsappId(telefone || whatsappId)
+  if (!cleanedPhone || !whatsappId) {
+    const error = new Error('Telefone do WhatsApp nÃ£o identificado.')
+    error.status = 400
+    throw error
+  }
+  const { rows } = await pool.query(`
+    insert into cscx_whatsapp_contatos (telefone, whatsapp_id, nome, last_message_at)
+    values ($1, $2, $3, $4)
+    on conflict (telefone) do update set
+      whatsapp_id = excluded.whatsapp_id,
+      nome = coalesce(cscx_whatsapp_contatos.nome, excluded.nome),
+      last_message_at = greatest(coalesce(cscx_whatsapp_contatos.last_message_at, '-infinity'::timestamptz), coalesce(excluded.last_message_at, '-infinity'::timestamptz))
+    returning *
+  `, [cleanedPhone, whatsappId, stringOrNull(nome), lastMessageAt])
+  return rows[0]
+}
+
+async function saveWhatsappMessage(contatoId, message) {
+  const whatsappId = message.fromMe ? message.to : message.from
+  const telefone = phoneFromWhatsappId(whatsappId)
+  const enviadoEm = message.timestamp ? new Date(message.timestamp * 1000).toISOString() : new Date().toISOString()
+  const { rows } = await pool.query(`
+    insert into cscx_whatsapp_mensagens (
+      contato_id, whatsapp_message_id, whatsapp_id, telefone, direcao, conteudo, tipo, enviado_em
+    )
+    values ($1, $2, $3, $4, $5, $6, $7, $8)
+    on conflict (whatsapp_message_id) do update set
+      conteudo = excluded.conteudo,
+      tipo = excluded.tipo
+    returning *
+  `, [
+    contatoId,
+    message.id?._serialized || null,
+    whatsappId,
+    telefone,
+    message.fromMe ? 'saida' : 'entrada',
+    message.body || '',
+    message.type || 'chat',
+    enviadoEm,
+  ])
+  await pool.query('update cscx_whatsapp_contatos set last_message_at = greatest(coalesce(last_message_at, $2::timestamptz), $2::timestamptz) where id = $1', [contatoId, enviadoEm])
+  return rows[0]
+}
+
+async function findAtendimentosByCodigoCliente(codigoCliente) {
+  const { rows } = await pool.query(`
+    select *
+    from cscx_atendimentos
+    where codigo_cliente = $1
+    order by coalesce(agendado_para, created_at) desc
+    limit 20
+  `, [codigoCliente])
+  return rows
 }
 
 app.use((err, _req, res, _next) => {

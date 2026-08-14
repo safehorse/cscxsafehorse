@@ -11,6 +11,7 @@ import {
   List,
   LoaderCircle,
   LogOut,
+  MessageCircle,
   RefreshCw,
   Search,
   User,
@@ -130,6 +131,13 @@ export function AgendaPage() {
           >
             <List size={15} />
             Chamados
+          </Link>
+          <Link
+            to="/whatsapp"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+          >
+            <MessageCircle size={15} />
+            WhatsApp
           </Link>
           <button
             type="button"

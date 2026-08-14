@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth, useClerk, useUser } from '@clerk/clerk-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Building2,
@@ -66,6 +66,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
   const { getToken } = useAuth()
   const { user } = useUser()
   const { signOut } = useClerk()
+  const [searchParams, setSearchParams] = useSearchParams()
   const isChamadosPage = mode === 'chamados'
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([])
@@ -128,6 +129,16 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
       // A nomeação não bloqueia o uso do app.
     })
   }, [user?.id])
+
+  useEffect(() => {
+    const id = searchParams.get('abrir')
+    if (!id || !isChamadosPage) return
+    openDetail(id).then(() => {
+      const next = new URLSearchParams(searchParams)
+      next.delete('abrir')
+      setSearchParams(next, { replace: true })
+    })
+  }, [isChamadosPage, searchParams, setSearchParams])
 
   const totalPages = Math.max(1, Math.ceil(totalAtendimentos / PAGE_SIZE))
 
@@ -264,6 +275,14 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
           >
             <List size={15} />
             Chamados
+          </Link>
+          <Link
+            to="/whatsapp"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+            title="WhatsApp"
+          >
+            <MessageSquareText size={15} />
+            WhatsApp
           </Link>
           <Link
             to="/usuarios"

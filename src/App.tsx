@@ -5,6 +5,7 @@ import { AgendaPage } from './pages/AgendaPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { UsuariosPage } from './pages/UsuariosPage'
+import { WhatsappPage } from './pages/WhatsappPage'
 
 export default function App() {
   return (
@@ -25,6 +26,12 @@ export default function App() {
         <Route path="/chamados" element={
           <>
             <SignedIn><DashboardPage mode="chamados" /></SignedIn>
+            <SignedOut><Navigate to="/login" replace /></SignedOut>
+          </>
+        } />
+        <Route path="/whatsapp" element={
+          <>
+            <SignedIn><WhatsappPage /></SignedIn>
             <SignedOut><Navigate to="/login" replace /></SignedOut>
           </>
         } />
