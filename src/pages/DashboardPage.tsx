@@ -59,10 +59,13 @@ const emptyWizard = {
 
 type WizardForm = typeof emptyWizard
 
-export function DashboardPage() {
+type DashboardMode = 'dashboard' | 'chamados'
+
+export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) {
   const { getToken } = useAuth()
   const { user } = useUser()
   const { signOut } = useClerk()
+  const isChamadosPage = mode === 'chamados'
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([])
   const [cadastros, setCadastros] = useState<CadastroOptions>({ setores: [], responsaveis: [] })
@@ -254,6 +257,14 @@ export function DashboardPage() {
             <RefreshCw size={15} />
           </button>
           <Link
+            to="/chamados"
+            className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors ${isChamadosPage ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            title="Chamados"
+          >
+            <List size={15} />
+            Chamados
+          </Link>
+          <Link
             to="/usuarios"
             className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
             title="Usuários"
@@ -275,23 +286,28 @@ export function DashboardPage() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1320px] gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_340px]">
+      <main className={`mx-auto grid max-w-[1320px] gap-5 px-4 py-6 sm:px-6 ${isChamadosPage ? '' : 'lg:grid-cols-[1fr_340px]'}`}>
         <section className="min-w-0 space-y-5">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label="Atendimentos" value={dashboard?.totais.total ?? 0} loading={loading} />
-            <Metric label="Em aberto" value={dashboard?.totais.abertos ?? 0} loading={loading} tone="blue" />
-            <Metric label="Agenda hoje" value={dashboard?.totais.hoje ?? 0} loading={loading} tone="amber" />
-            <Metric label="Valor envolvido" value={money(dashboard?.totais.valor_total)} loading={loading} tone="emerald" />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label="Atendimentos hoje" value={dashboard?.totais.atendimentos_hoje ?? 0} loading={loading} />
-            <Metric label="Solucionados" value={dashboard?.totais.solucionados ?? 0} loading={loading} tone="emerald" />
-            <Metric label="Reembolsados" value={dashboard?.totais.reembolsados ?? 0} loading={loading} tone="amber" />
-            <Metric label="Valor reembolsado" value={money(dashboard?.totais.valor_reembolso)} loading={loading} tone="blue" />
-          </div>
+          {!isChamadosPage && (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <Metric label="Atendimentos" value={dashboard?.totais.total ?? 0} loading={loading} />
+                <Metric label="Em aberto" value={dashboard?.totais.abertos ?? 0} loading={loading} tone="blue" />
+                <Metric label="Agenda hoje" value={dashboard?.totais.hoje ?? 0} loading={loading} tone="amber" />
+                <Metric label="Valor envolvido" value={money(dashboard?.totais.valor_total)} loading={loading} tone="emerald" />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <Metric label="Atendimentos hoje" value={dashboard?.totais.atendimentos_hoje ?? 0} loading={loading} />
+                <Metric label="Solucionados" value={dashboard?.totais.solucionados ?? 0} loading={loading} tone="emerald" />
+                <Metric label="Reembolsados" value={dashboard?.totais.reembolsados ?? 0} loading={loading} tone="amber" />
+                <Metric label="Valor reembolsado" value={money(dashboard?.totais.valor_reembolso)} loading={loading} tone="blue" />
+              </div>
 
-          <AtendimentosPorDataChart rows={dashboard?.por_data ?? []} loading={loading} />
+              <AtendimentosPorDataChart rows={dashboard?.por_data ?? []} loading={loading} />
+            </>
+          )}
 
+          {isChamadosPage && (
           <div className="rounded-2xl border border-gray-200 bg-white">
             <div className="border-b border-gray-100 p-4">
               <div className="flex flex-wrap items-center gap-3">
@@ -439,8 +455,10 @@ export function DashboardPage() {
               </>
             )}
           </div>
+          )}
         </section>
 
+        {!isChamadosPage && (
         <aside className="space-y-5">
           <div className="rounded-2xl border border-gray-200 bg-white p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -493,6 +511,7 @@ export function DashboardPage() {
             <StatusChart rows={dashboard?.status ?? []} loading={loading} />
           </div>
         </aside>
+        )}
       </main>
 
       {selected && (

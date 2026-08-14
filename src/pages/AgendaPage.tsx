@@ -121,7 +121,14 @@ export function AgendaPage() {
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
           >
             <ArrowLeft size={15} />
-            Atendimentos
+            Dashboard
+          </Link>
+          <Link
+            to="/chamados"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+          >
+            <List size={15} />
+            Chamados
           </Link>
           <button
             type="button"

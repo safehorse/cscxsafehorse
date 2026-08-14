@@ -22,6 +22,12 @@ export default function App() {
             <SignedOut><Navigate to="/login" replace /></SignedOut>
           </>
         } />
+        <Route path="/chamados" element={
+          <>
+            <SignedIn><DashboardPage mode="chamados" /></SignedIn>
+            <SignedOut><Navigate to="/login" replace /></SignedOut>
+          </>
+        } />
         <Route path="/usuarios" element={
           <>
             <SignedIn><UsuariosPage /></SignedIn>
@@ -30,7 +36,7 @@ export default function App() {
         } />
         <Route path="/*" element={
           <>
-            <SignedIn><DashboardPage /></SignedIn>
+            <SignedIn><DashboardPage mode="dashboard" /></SignedIn>
             <SignedOut><Navigate to="/login" replace /></SignedOut>
           </>
         } />
