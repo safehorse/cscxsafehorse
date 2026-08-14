@@ -362,13 +362,17 @@ export function ClientesPage() {
                               <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">{pedido.situacao_erp}</span>
                             )}
                             <p className="shrink-0 text-[11px] font-medium text-gray-400">{date(pedido.data_pedido)}</p>
-                            <ChevronRight size={15} className={`shrink-0 text-gray-400 transition-transform ${expandedPedidoId === pedido.id ? 'rotate-90' : ''}`} />
+                            <ChevronRight size={15} className={`shrink-0 text-gray-400 transition-transform duration-300 ${expandedPedidoId === pedido.id ? 'rotate-90' : ''}`} />
                           </button>
-                          {expandedPedidoId === pedido.id && (
-                            <div className="border-t border-gray-100 p-3 pt-0">
-                              <PedidoResumo pedido={pedido} compact />
+                          <div
+                            className={`grid transition-all duration-300 ease-in-out ${expandedPedidoId === pedido.id ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+                          >
+                            <div className="overflow-hidden">
+                              <div className="border-t border-gray-100 p-3 pt-3">
+                                <PedidoResumo pedido={pedido} compact />
+                              </div>
                             </div>
-                          )}
+                          </div>
                         </div>
                       ))}
                     </div>

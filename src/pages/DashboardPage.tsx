@@ -340,7 +340,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
             <>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <Metric label="Atendimentos" value={dashboard?.totais.total ?? 0} loading={loading} />
-                <Metric label="Em aberto" value={dashboard?.totais.abertos ?? 0} loading={loading} tone="blue" />
+                <Metric label="Em andamento" value={dashboard?.totais.abertos ?? 0} loading={loading} tone="blue" />
                 <Metric label="Agenda hoje" value={dashboard?.totais.hoje ?? 0} loading={loading} tone="amber" />
                 <Metric label="Valor envolvido" value={money(dashboard?.totais.valor_total)} loading={loading} tone="emerald" />
               </div>
