@@ -42,6 +42,16 @@ export function ClientesPage() {
   const [detailPedidos, setDetailPedidos] = useState<PcpPedido[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [expandedPedidoId, setExpandedPedidoId] = useState<string | null>(null)
+  const [closingCliente, setClosingCliente] = useState(false)
+
+  function requestCloseCliente() {
+    if (closingCliente) return
+    setClosingCliente(true)
+    window.setTimeout(() => {
+      setSelectedCliente(null)
+      setClosingCliente(false)
+    }, 180)
+  }
 
   async function load() {
     setLoading(true)
@@ -250,11 +260,11 @@ export function ClientesPage() {
 
       {selectedCliente && (
         <div
-          className="fixed inset-0 z-40 grid place-items-center bg-gray-950/30 p-4 backdrop-blur-sm"
-          onMouseDown={() => setSelectedCliente(null)}
+          className={`${closingCliente ? 'drawer-backdrop-out' : 'drawer-backdrop-in'} fixed inset-0 z-40 grid place-items-center bg-gray-950/30 p-4 backdrop-blur-sm`}
+          onMouseDown={requestCloseCliente}
         >
           <div
-            className="max-h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            className={`${closingCliente ? 'modal-panel-out' : 'modal-panel-in'} max-h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl`}
             onMouseDown={event => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-5">
@@ -298,7 +308,7 @@ export function ClientesPage() {
                   </p>
                 )}
               </div>
-              <button className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={() => setSelectedCliente(null)}>
+              <button className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={requestCloseCliente}>
                 <X size={18} />
               </button>
             </div>

@@ -1026,7 +1026,17 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   const [resultadosBusca, setResultadosBusca] = useState<PcpPedidoResumo[]>([])
   const [loadingResultados, setLoadingResultados] = useState(false)
   const [previewPedido, setPreviewPedido] = useState<PcpPedido | null>(null)
+  const [closingPreview, setClosingPreview] = useState(false)
   const [loadingPreview, setLoadingPreview] = useState(false)
+
+  function requestClosePreview() {
+    if (closingPreview) return
+    setClosingPreview(true)
+    window.setTimeout(() => {
+      setPreviewPedido(null)
+      setClosingPreview(false)
+    }, 180)
+  }
   const [pedido, setPedido] = useState<PcpPedido | null>(null)
   const [selectedItems, setSelectedItems] = useState<PcpPedidoItem[]>([])
   const [form, setForm] = useState<WizardForm>(emptyWizard)
@@ -1555,16 +1565,16 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
 
       {previewPedido && (
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-gray-950/40 p-4 backdrop-blur-sm"
-          onMouseDown={event => { event.stopPropagation(); setPreviewPedido(null) }}
+          className={`${closingPreview ? 'drawer-backdrop-out' : 'drawer-backdrop-in'} fixed inset-0 z-50 grid place-items-center bg-gray-950/40 p-4 backdrop-blur-sm`}
+          onMouseDown={event => { event.stopPropagation(); requestClosePreview() }}
         >
           <div
-            className="w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            className={`${closingPreview ? 'modal-panel-out' : 'modal-panel-in'} w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl`}
             onMouseDown={event => event.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 border-b border-gray-100 p-4">
               <h3 className="text-sm font-bold text-gray-950">Detalhes do pedido</h3>
-              <button className="grid h-8 w-8 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={() => setPreviewPedido(null)}>
+              <button className="grid h-8 w-8 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={requestClosePreview}>
                 <X size={16} />
               </button>
             </div>
@@ -1587,7 +1597,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
             <div className="flex items-center justify-end gap-2 border-t border-gray-100 p-4">
               <button
                 className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
-                onClick={() => setPreviewPedido(null)}
+                onClick={requestClosePreview}
               >
                 Fechar
               </button>

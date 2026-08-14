@@ -10,8 +10,15 @@ export function WhatsappConnectModal({ onClose }: { onClose: () => void }) {
   const [extensaoStatus, setExtensaoStatus] = useState<WhatsappExtensaoStatus | null>(null)
   const [loadingStatus, setLoadingStatus] = useState(true)
   const [loadingExtensao, setLoadingExtensao] = useState(false)
+  const [closing, setClosing] = useState(false)
 
   const connected = extensaoStatus?.status === 'conectado'
+
+  function requestClose() {
+    if (closing) return
+    setClosing(true)
+    window.setTimeout(onClose, 180)
+  }
 
   async function loadStatus(silent = false) {
     if (!silent) setLoadingStatus(true)
@@ -59,11 +66,11 @@ export function WhatsappConnectModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-40 grid place-items-center bg-gray-950/40 p-4 backdrop-blur-sm"
-      onMouseDown={onClose}
+      className={`${closing ? 'drawer-backdrop-out' : 'drawer-backdrop-in'} fixed inset-0 z-40 grid place-items-center bg-gray-950/40 p-4 backdrop-blur-sm`}
+      onMouseDown={requestClose}
     >
       <section
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-white p-6 text-gray-950 shadow-2xl"
+        className={`${closing ? 'modal-panel-out' : 'modal-panel-in'} w-full max-w-md rounded-2xl border border-white/10 bg-white p-6 text-gray-950 shadow-2xl`}
         onMouseDown={event => event.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -76,7 +83,7 @@ export function WhatsappConnectModal({ onClose }: { onClose: () => void }) {
               {loadingStatus ? 'Carregando...' : extensaoLabel(extensaoStatus)}
             </p>
           </div>
-          <button className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={onClose}>
+          <button className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={requestClose}>
             <X size={18} />
           </button>
         </div>
