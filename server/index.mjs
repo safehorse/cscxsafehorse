@@ -578,6 +578,18 @@ app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
     sets.push(`${field} = $${values.length}`)
   }
   if (!sets.length) return res.status(400).json({ error: 'Nenhum campo válido para atualizar.' })
+  // Reabrir um chamado finalizado exige motivo + produto (rota /reabrir) -
+  // PATCH não pode ser usado pra pular essa exigência (nem via drag no
+  // Kanban, nem pelos botões de status do drawer).
+  if ('status' in req.body) {
+    const nextStatus = normalizaStatus(req.body.status)
+    if (nextStatus !== 'FINALIZADO') {
+      const { rows: currentRows } = await pool.query('select status from cscx_atendimentos where id = $1', [req.params.id])
+      if (currentRows[0]?.status === 'FINALIZADO') {
+        return res.status(400).json({ error: 'Chamado finalizado só reabre pela rota de reabertura (motivo + produto).' })
+      }
+    }
+  }
   values.push(getUserId(req))
   sets.push(`updated_by_clerk_user_id = $${values.length}`)
   values.push(req.params.id)

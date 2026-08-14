@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth, useClerk, useUser } from '@clerk/clerk-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
@@ -1967,16 +1968,41 @@ function Listbox({ label, value, options, icon, emptyLabel, createTitle, onChang
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState(value)
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 })
+  const anchorRef = useRef<HTMLDivElement>(null)
   const normalizedValue = value.trim().toLowerCase()
   const exists = options.some(option => option.toLowerCase() === normalizedValue)
   const filtered = options
     .filter(option => option.toLowerCase().includes(query.trim().toLowerCase()))
     .slice(0, 8)
 
+  function updateCoords() {
+    const rect = anchorRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setCoords({ top: rect.bottom + 6, left: rect.left, width: rect.width })
+  }
+
   function openList() {
     setQuery('')
+    updateCoords()
     setOpen(true)
   }
+
+  // O modal/drawer que contem o listbox tem overflow-y-auto - se o dropdown
+  // ficasse posicionado dentro dele (position: absolute), ele seria cortado
+  // pela area de scroll do modal em vez de flutuar por cima. Por isso é
+  // desenhado via portal, fixo na tela, recalculando a posição a cada
+  // scroll/resize enquanto estiver aberto.
+  useEffect(() => {
+    if (!open) return
+    updateCoords()
+    window.addEventListener('scroll', updateCoords, true)
+    window.addEventListener('resize', updateCoords)
+    return () => {
+      window.removeEventListener('scroll', updateCoords, true)
+      window.removeEventListener('resize', updateCoords)
+    }
+  }, [open])
 
   function selectOption(option: string) {
     onChange(option)
@@ -1988,7 +2014,7 @@ function Listbox({ label, value, options, icon, emptyLabel, createTitle, onChang
     <div className="relative">
       <span className="mb-1 block text-xs font-medium text-gray-500">{label}</span>
       <div className="flex gap-2">
-        <div className="relative min-w-0 flex-1">
+        <div ref={anchorRef} className="relative min-w-0 flex-1">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{icon}</span>
           <input
             value={open ? query : value}
@@ -1998,6 +2024,7 @@ function Listbox({ label, value, options, icon, emptyLabel, createTitle, onChang
               setQuery(event.target.value)
               onChange(event.target.value)
               setOpen(true)
+              updateCoords()
             }}
             placeholder="Selecione ou digite..."
             className="h-10 w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-8 text-sm outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
@@ -2007,8 +2034,11 @@ function Listbox({ label, value, options, icon, emptyLabel, createTitle, onChang
             className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
           />
 
-          {open && (
-            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+          {open && createPortal(
+            <div
+              style={{ position: 'fixed', top: coords.top, left: coords.left, width: coords.width }}
+              className="z-[9999] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+            >
               {filtered.length === 0 ? (
                 <div className="px-3 py-3 text-sm text-gray-400">{emptyLabel}</div>
               ) : (
@@ -2034,7 +2064,8 @@ function Listbox({ label, value, options, icon, emptyLabel, createTitle, onChang
                   })}
                 </div>
               )}
-            </div>
+            </div>,
+            document.body,
           )}
         </div>
 

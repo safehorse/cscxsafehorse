@@ -228,6 +228,10 @@ export function KanbanPage() {
     if (!itemId) return
     const item = items.find(entry => entry.id === itemId)
     if (!item || item.status === targetStatus) return
+    if (item.status === 'FINALIZADO') {
+      toast.warning('Chamado finalizado só reabre com motivo e produto vinculado. Abra o chamado e use "Reabrir chamado".')
+      return
+    }
     const previousStatus = item.status
     setItems(prev => prev.map(entry => entry.id === itemId ? { ...entry, status: targetStatus } : entry))
     try {
