@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth, useClerk, useUser } from '@clerk/clerk-react'
 import { Link } from 'react-router-dom'
 import {
@@ -45,6 +45,8 @@ export function KanbanPage() {
   const [draggingStatus, setDraggingStatus] = useState<string | null>(null)
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null)
+  const boardScrollRef = useRef<HTMLDivElement>(null)
+  const autoScrollRef = useRef<number | null>(null)
 
   const statuses = useMemo(() => {
     const found = unique(items.map(item => item.status).filter(Boolean))
@@ -127,13 +129,49 @@ export function KanbanPage() {
   }
 
   function handleColumnDrop(targetStatus: string) {
+    stopAutoScroll()
     if (draggingItemId) dropCard(targetStatus)
     else if (draggingStatus) dropColumn(targetStatus)
+  }
+
+  function stopAutoScroll() {
+    if (autoScrollRef.current != null) {
+      cancelAnimationFrame(autoScrollRef.current)
+      autoScrollRef.current = null
+    }
+  }
+
+  function startAutoScroll(speed: number) {
+    if (autoScrollRef.current != null) return
+    const step = () => {
+      const el = boardScrollRef.current
+      if (el) el.scrollLeft += speed
+      autoScrollRef.current = requestAnimationFrame(step)
+    }
+    autoScrollRef.current = requestAnimationFrame(step)
+  }
+
+  function handleBoardDragOver(event: React.DragEvent<HTMLDivElement>) {
+    const el = boardScrollRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const edge = 90
+    const distanceFromLeft = event.clientX - rect.left
+    const distanceFromRight = rect.right - event.clientX
+    if (distanceFromLeft < edge) {
+      startAutoScroll(-Math.max(6, (edge - distanceFromLeft) / 3))
+    } else if (distanceFromRight < edge) {
+      startAutoScroll(Math.max(6, (edge - distanceFromRight) / 3))
+    } else {
+      stopAutoScroll()
+    }
   }
 
   useEffect(() => {
     load()
   }, [])
+
+  useEffect(() => stopAutoScroll, [])
 
   useEffect(() => {
     const email = user?.primaryEmailAddress?.emailAddress
@@ -230,7 +268,13 @@ export function KanbanPage() {
               <LoaderCircle className="animate-spin" size={30} />
             </div>
           ) : (
-            <section className="min-h-[calc(100vh-214px)] overflow-x-auto pb-2">
+            <section
+              ref={boardScrollRef}
+              onDragOver={handleBoardDragOver}
+              onDragLeave={stopAutoScroll}
+              onDrop={stopAutoScroll}
+              className="min-h-[calc(100vh-214px)] overflow-x-auto pb-2"
+            >
               <div className="flex min-w-max gap-4">
                 {statuses.map((status, index) => {
                   const tone = getStatusTone(status)
@@ -249,7 +293,10 @@ export function KanbanPage() {
                       <div
                         draggable
                         onDragStart={() => setDraggingStatus(status)}
-                        onDragEnd={() => setDraggingStatus(null)}
+                        onDragEnd={() => {
+                          setDraggingStatus(null)
+                          stopAutoScroll()
+                        }}
                         className="shrink-0 cursor-grab border-b border-white/70 p-3 active:cursor-grabbing"
                       >
                         <div className="flex items-center gap-2">
@@ -295,6 +342,7 @@ export function KanbanPage() {
                               onDragEnd={() => {
                                 setDraggingItemId(null)
                                 setDragOverStatus(null)
+                                stopAutoScroll()
                               }}
                               className={`block cursor-grab rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 active:cursor-grabbing ${draggingItemId === item.id ? 'opacity-40' : ''}`}
                             >
