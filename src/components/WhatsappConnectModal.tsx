@@ -88,7 +88,7 @@ export function WhatsappConnectModal({ onClose }: { onClose: () => void }) {
 
         <div className="space-y-4">
           <a
-            href="/whatsapp-extension-1.3.1.zip"
+            href="/whatsapp-extension-1.4.0.zip"
             download
             className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 transition-colors hover:bg-gray-100"
           >

@@ -30,24 +30,17 @@ function boot() {
     console.error('CSCX WhatsApp Bridge: falha ao criar o painel', error)
   }
 }
-if (document.body) boot()
-else document.addEventListener('DOMContentLoaded', boot)
 
-async function getToken() {
-  const { whatsappToken } = await chrome.storage.local.get('whatsappToken')
-  return whatsappToken || null
-}
-
+// O CSP da própria página do WhatsApp Web bloqueia fetch() direto pra fora
+// da lista dela, então quem faz a chamada de verdade é o service worker
+// (background.js), que não passa por esse CSP - aqui só repassa a mensagem.
 async function apiFetch(path, init) {
-  const token = await getToken()
-  if (!token) return null
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', 'x-whatsapp-token': token, ...init?.headers },
+  const result = await chrome.runtime.sendMessage({
+    type: 'api-request',
+    payload: { path, method: init?.method || 'GET', body: init?.body },
   })
-  const body = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(body?.error || `Erro HTTP ${response.status}`)
-  return body?.data
+  if (!result?.ok) throw new Error(result?.error || 'Falha ao comunicar com o servidor.')
+  return result.data
 }
 
 const STYLE = `
@@ -347,3 +340,10 @@ function escapeHtml(value) {
 function escapeAttr(value) {
   return escapeHtml(value)
 }
+
+// Só dispara depois que toda função/const acima já foi declarada - chamar
+// boot() antes disso (ex: logo depois de "const API_BASE = ...") quebra com
+// ReferenceError assim que boot() tenta usar algo declarado mais abaixo
+// (já aconteceu com panelEl e de novo com STYLE).
+if (document.body) boot()
+else document.addEventListener('DOMContentLoaded', boot)
