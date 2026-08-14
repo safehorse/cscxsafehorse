@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth, useClerk, useUser } from '@clerk/clerk-react'
 import {
+  ArrowLeft,
+  Building2,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -9,22 +11,26 @@ import {
   LoaderCircle,
   LogOut,
   MessageSquareText,
+  PackageSearch,
   Plus,
   RefreshCw,
   Search,
   User,
+  UserPlus,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import logoSrc from '../assets/logo.png'
 import { api } from '../lib/api'
-import type { Atendimento, DashboardData } from '../lib/types'
+import type { Atendimento, CadastroOptions, DashboardData, PcpPedido, PcpPedidoItem } from '../lib/types'
 
 const STATUS_OPTIONS = ['ABERTO', 'AGUARDANDO DEVOLUCAO', 'FINALIZADO', 'EM ANALISE', 'CREDITO GERADO', 'TROCA GERADA']
+const PRIORIDADES = ['baixa', 'normal', 'alta', 'urgente'] as const
 
-const emptyForm = {
-  data_solicitacao: '',
+const emptyWizard = {
+  data_solicitacao: new Date().toISOString().slice(0, 10),
   numero_pedido: '',
+  codigo_cliente: '',
   cliente: '',
   codigo_produto: '',
   descricao_produto: '',
@@ -44,7 +50,7 @@ const emptyForm = {
   agendado_para: '',
 }
 
-type FormState = typeof emptyForm
+type WizardForm = typeof emptyWizard
 
 export function DashboardPage() {
   const { getToken } = useAuth()
@@ -52,6 +58,7 @@ export function DashboardPage() {
   const { signOut } = useClerk()
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([])
+  const [cadastros, setCadastros] = useState<CadastroOptions>({ setores: [], responsaveis: [] })
   const [selected, setSelected] = useState<Atendimento | null>(null)
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -59,18 +66,19 @@ export function DashboardPage() {
   const [status, setStatus] = useState('')
   const [responsavel, setResponsavel] = useState('')
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState<FormState>(emptyForm)
   const [note, setNote] = useState('')
 
   async function load() {
     setLoading(true)
     try {
-      const [dash, list] = await Promise.all([
+      const [dash, list, options] = await Promise.all([
         api.dashboard(getToken),
         api.atendimentos(getToken, { search, status, responsavel }),
+        api.cadastros(getToken),
       ])
       setDashboard(dash)
       setAtendimentos(list.data)
+      setCadastros(options)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao carregar dados.')
     } finally {
@@ -82,6 +90,14 @@ export function DashboardPage() {
     const timeout = window.setTimeout(load, 250)
     return () => window.clearTimeout(timeout)
   }, [search, status, responsavel])
+
+  async function reloadCadastros() {
+    try {
+      setCadastros(await api.cadastros(getToken))
+    } catch {
+      // A lista continua funcionando com o cache atual.
+    }
+  }
 
   async function openDetail(id: string) {
     setDetailLoading(true)
@@ -105,20 +121,6 @@ export function DashboardPage() {
       load()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao atualizar.')
-    }
-  }
-
-  async function createAtendimento() {
-    try {
-      const body = formToPayload(form)
-      const { data } = await api.createAtendimento(getToken, body)
-      setShowCreate(false)
-      setForm(emptyForm)
-      setAtendimentos(prev => [data, ...prev])
-      toast.success('Atendimento criado.')
-      load()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Falha ao criar atendimento.')
     }
   }
 
@@ -312,119 +314,429 @@ export function DashboardPage() {
       </main>
 
       {selected && (
-        <div className="fixed inset-0 z-30 bg-gray-950/30 p-4 backdrop-blur-sm" onMouseDown={() => setSelected(null)}>
-          <div
-            className="ml-auto h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
-            onMouseDown={event => event.stopPropagation()}
-          >
-            <div className="sticky top-0 z-10 border-b border-gray-100 bg-white p-5">
-              <div className="flex items-start gap-3">
-                <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-xl font-bold text-gray-950">Pedido #{selected.numero_pedido ?? 'sem numero'}</h2>
-                  <p className="mt-1 truncate text-sm text-gray-500">{selected.cliente ?? 'Cliente nao informado'}</p>
-                </div>
-                <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={() => setSelected(null)}>
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-
-            {detailLoading ? (
-              <div className="grid place-items-center py-20 text-gray-400">
-                <LoaderCircle className="animate-spin" />
-              </div>
-            ) : (
-              <div className="space-y-5 p-5">
-                <div className="flex flex-wrap gap-2">
-                  <StatusBadge status={selected.status} />
-                  <PriorityBadge value={selected.prioridade} />
-                  {selected.agendado_para && <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">{dateTime(selected.agendado_para)}</span>}
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Info label="Produto" value={selected.descricao_produto} />
-                  <Info label="Codigo produto" value={selected.codigo_produto} />
-                  <Info label="Quantidade" value={selected.quantidade?.toString()} />
-                  <Info label="Valor total" value={money(selected.valor_total)} />
-                  <Info label="Setor" value={selected.setor} />
-                  <Info label="Responsavel" value={selected.responsavel} />
-                  <Info label="Vendedor" value={selected.vendedor} />
-                  <Info label="Novo pedido" value={selected.novo_pedido} />
-                </div>
-
-                <section>
-                  <h3 className="mb-2 text-sm font-semibold text-gray-950">Situacao</h3>
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed text-gray-700">
-                    <p className="font-medium text-gray-900">{selected.motivo ?? 'Sem motivo informado'}</p>
-                    {selected.descricao_situacao && <p className="mt-2 whitespace-pre-wrap">{selected.descricao_situacao}</p>}
-                    {selected.proxima_acao && <p className="mt-2 text-blue-700">Proxima acao: {selected.proxima_acao}</p>}
-                  </div>
-                </section>
-
-                <section className="flex flex-wrap gap-2">
-                  {STATUS_OPTIONS.map(option => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => saveStatus(option)}
-                      className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
-                        selected.status === option
-                          ? 'border-blue-300 bg-blue-50 text-blue-700'
-                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={consultPcp}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:border-gray-300"
-                  >
-                    <ExternalLink size={13} />
-                    PCP
-                  </button>
-                </section>
-
-                <section>
-                  <h3 className="mb-2 text-sm font-semibold text-gray-950">Historico</h3>
-                  <div className="space-y-2">
-                    {(selected.interacoes ?? []).map(item => (
-                      <div key={item.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                        <div className="mb-1 flex items-center gap-2 text-xs text-gray-400">
-                          <MessageSquareText size={13} />
-                          {item.tipo} - {dateTime(item.realizado_em)}
-                        </div>
-                        <p className="whitespace-pre-wrap text-sm text-gray-700">{item.descricao}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 flex gap-2">
-                    <input
-                      value={note}
-                      onChange={event => setNote(event.target.value)}
-                      placeholder="Adicionar nota..."
-                      className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                    />
-                    <button onClick={addNote} className="rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700">
-                      Salvar
-                    </button>
-                  </div>
-                </section>
-              </div>
-            )}
-          </div>
-        </div>
+        <DetailDrawer
+          selected={selected}
+          loading={detailLoading}
+          note={note}
+          setNote={setNote}
+          onClose={() => setSelected(null)}
+          onSaveStatus={saveStatus}
+          onAddNote={addNote}
+          onConsultPcp={consultPcp}
+        />
       )}
 
       {showCreate && (
-        <CreateModal
-          form={form}
-          setForm={setForm}
+        <CreateWizard
+          getToken={getToken}
+          cadastros={cadastros}
+          onCadastroChanged={reloadCadastros}
           onClose={() => setShowCreate(false)}
-          onSave={createAtendimento}
+          onSaved={(data) => {
+            setShowCreate(false)
+            setAtendimentos(prev => [data, ...prev])
+            toast.success('Atendimento criado.')
+            load()
+          }}
         />
       )}
+    </div>
+  )
+}
+
+function DetailDrawer({ selected, loading, note, setNote, onClose, onSaveStatus, onAddNote, onConsultPcp }: {
+  selected: Atendimento
+  loading: boolean
+  note: string
+  setNote: (value: string) => void
+  onClose: () => void
+  onSaveStatus: (status: string) => void
+  onAddNote: () => void
+  onConsultPcp: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-30 bg-gray-950/30 p-4 backdrop-blur-sm" onMouseDown={onClose}>
+      <div className="ml-auto h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
+        <div className="sticky top-0 z-10 border-b border-gray-100 bg-white p-5">
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-xl font-bold text-gray-950">Pedido #{selected.numero_pedido ?? 'sem numero'}</h2>
+              <p className="mt-1 truncate text-sm text-gray-500">{selected.cliente ?? 'Cliente nao informado'}</p>
+            </div>
+            <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={onClose}>
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="grid place-items-center py-20 text-gray-400">
+            <LoaderCircle className="animate-spin" />
+          </div>
+        ) : (
+          <div className="space-y-5 p-5">
+            <div className="flex flex-wrap gap-2">
+              <StatusBadge status={selected.status} />
+              <PriorityBadge value={selected.prioridade} />
+              {selected.agendado_para && <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">{dateTime(selected.agendado_para)}</span>}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Info label="ID cliente" value={selected.codigo_cliente} />
+              <Info label="Produto" value={selected.descricao_produto} />
+              <Info label="Codigo produto" value={selected.codigo_produto} />
+              <Info label="Quantidade" value={selected.quantidade?.toString()} />
+              <Info label="Valor unitario" value={money(selected.valor_unitario)} />
+              <Info label="Valor total" value={money(selected.valor_total)} />
+              <Info label="Setor" value={selected.setor} />
+              <Info label="Responsavel" value={selected.responsavel} />
+              <Info label="Vendedor" value={selected.vendedor} />
+              <Info label="Novo pedido" value={selected.novo_pedido} />
+            </div>
+
+            <section>
+              <h3 className="mb-2 text-sm font-semibold text-gray-950">Situacao</h3>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed text-gray-700">
+                <p className="font-medium text-gray-900">{selected.motivo ?? 'Sem motivo informado'}</p>
+                {selected.descricao_situacao && <p className="mt-2 whitespace-pre-wrap">{selected.descricao_situacao}</p>}
+                {selected.proxima_acao && <p className="mt-2 text-blue-700">Proxima acao: {selected.proxima_acao}</p>}
+              </div>
+            </section>
+
+            <section className="flex flex-wrap gap-2">
+              {STATUS_OPTIONS.map(option => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => onSaveStatus(option)}
+                  className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
+                    selected.status === option
+                      ? 'border-blue-300 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={onConsultPcp}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:border-gray-300"
+              >
+                <ExternalLink size={13} />
+                PCP
+              </button>
+            </section>
+
+            <section>
+              <h3 className="mb-2 text-sm font-semibold text-gray-950">Historico</h3>
+              <div className="space-y-2">
+                {(selected.interacoes ?? []).map(item => (
+                  <div key={item.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                    <div className="mb-1 flex items-center gap-2 text-xs text-gray-400">
+                      <MessageSquareText size={13} />
+                      {item.tipo} - {dateTime(item.realizado_em)}
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm text-gray-700">{item.descricao}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={note}
+                  onChange={event => setNote(event.target.value)}
+                  placeholder="Adicionar nota..."
+                  className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+                <button onClick={onAddNote} className="rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700">
+                  Salvar
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved }: {
+  getToken: () => Promise<string | null>
+  cadastros: CadastroOptions
+  onCadastroChanged: () => void
+  onClose: () => void
+  onSaved: (data: Atendimento) => void
+}) {
+  const [step, setStep] = useState(1)
+  const [codigoBusca, setCodigoBusca] = useState('')
+  const [pedido, setPedido] = useState<PcpPedido | null>(null)
+  const [selectedItem, setSelectedItem] = useState<PcpPedidoItem | null>(null)
+  const [form, setForm] = useState<WizardForm>(emptyWizard)
+  const [loadingPedido, setLoadingPedido] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  function update(key: keyof WizardForm, value: string) {
+    setForm(prev => ({ ...prev, [key]: value }))
+  }
+
+  function applyPedido(next: PcpPedido) {
+    setPedido(next)
+    setSelectedItem(null)
+    setForm(prev => ({
+      ...prev,
+      numero_pedido: next.codigo_venda,
+      codigo_cliente: next.codigo_cliente ?? '',
+      cliente: next.nome_cliente ?? '',
+      vendedor: next.vendedor ?? '',
+      data_solicitacao: prev.data_solicitacao || new Date().toISOString().slice(0, 10),
+      descricao_situacao: next.observacoes ?? prev.descricao_situacao,
+    }))
+    if (next.itens.length === 1) applyItem(next.itens[0], next)
+    setStep(next.itens.length === 1 ? 3 : 2)
+  }
+
+  function applyItem(item: PcpPedidoItem, sourcePedido = pedido) {
+    setSelectedItem(item)
+    setForm(prev => ({
+      ...prev,
+      numero_pedido: sourcePedido?.codigo_venda ?? prev.numero_pedido,
+      codigo_cliente: sourcePedido?.codigo_cliente ?? prev.codigo_cliente,
+      cliente: sourcePedido?.nome_cliente ?? prev.cliente,
+      vendedor: sourcePedido?.vendedor ?? prev.vendedor,
+      codigo_produto: item.codigo_produto ?? '',
+      descricao_produto: item.descricao_produto ?? '',
+      quantidade: item.quantidade != null ? String(item.quantidade) : '',
+      valor_unitario: item.valor_unitario != null ? String(round2(item.valor_unitario)) : '',
+      valor_total: item.valor_total != null ? String(round2(item.valor_total)) : '',
+      descricao_situacao: item.obs ?? prev.descricao_situacao,
+    }))
+  }
+
+  async function buscarPedido() {
+    const codigo = codigoBusca.trim()
+    if (!codigo) return
+    setLoadingPedido(true)
+    try {
+      const { data } = await api.pcpPedido(getToken, codigo)
+      if (!data) {
+        toast.warning('Pedido nao encontrado no PCP.')
+        return
+      }
+      applyPedido(data)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao buscar pedido.')
+    } finally {
+      setLoadingPedido(false)
+    }
+  }
+
+  async function createCadastro(kind: 'setor' | 'responsavel') {
+    const value = (kind === 'setor' ? form.setor : form.responsavel).trim()
+    if (!value) return
+    try {
+      if (kind === 'setor') await api.createSetor(getToken, value)
+      else await api.createResponsavel(getToken, value)
+      toast.success(kind === 'setor' ? 'Setor cadastrado.' : 'Responsavel cadastrado.')
+      onCadastroChanged()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao cadastrar.')
+    }
+  }
+
+  async function save() {
+    if (!pedido) return toast.warning('Busque o pedido.')
+    if (!selectedItem) return toast.warning('Selecione o produto.')
+    if (!form.motivo.trim()) return toast.warning('Informe o motivo.')
+    if (!form.setor.trim()) return toast.warning('Informe o setor.')
+    if (!form.responsavel.trim()) return toast.warning('Informe o responsavel.')
+
+    setSaving(true)
+    try {
+      const { data } = await api.createAtendimento(getToken, {
+        ...formToPayload(form),
+        pcp_pedido_id: pedido.id,
+        pcp_item_id: selectedItem.id,
+        pcp_payload: { pedido, item: selectedItem },
+      })
+      onSaved(data)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao criar atendimento.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 grid place-items-center bg-gray-950/30 p-4 backdrop-blur-sm" onMouseDown={onClose}>
+      <div className="max-h-full w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
+        <div className="flex items-center gap-3 border-b border-gray-100 p-5">
+          <div>
+            <h2 className="text-lg font-bold text-gray-950">Novo atendimento</h2>
+            <div className="mt-2 flex gap-1.5">
+              {[1, 2, 3].map(item => (
+                <span key={item} className={`h-1.5 w-10 rounded-full ${step >= item ? 'bg-blue-600' : 'bg-gray-200'}`} />
+              ))}
+            </div>
+          </div>
+          <div className="flex-1" />
+          <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-5">
+          {step === 1 && (
+            <div className="space-y-5">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <PackageSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={codigoBusca}
+                    onChange={event => setCodigoBusca(event.target.value)}
+                    onKeyDown={event => { if (event.key === 'Enter') buscarPedido() }}
+                    placeholder="Numero do pedido"
+                    className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={buscarPedido}
+                  disabled={loadingPedido}
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {loadingPedido ? <LoaderCircle size={16} className="animate-spin" /> : <Search size={16} />}
+                  Buscar
+                </button>
+              </div>
+              {pedido && <PedidoResumo pedido={pedido} />}
+            </div>
+          )}
+
+          {step === 2 && pedido && (
+            <div className="space-y-3">
+              <PedidoResumo pedido={pedido} />
+              <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200">
+                {pedido.itens.map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => { applyItem(item); setStep(3) }}
+                    className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-gray-50"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-gray-950">{item.descricao_produto ?? 'Produto sem nome'}</p>
+                      <p className="text-xs text-gray-400">ERP {item.codigo_produto ?? '-'} - Qtd {item.quantidade ?? '-'}</p>
+                    </div>
+                    <div className="text-right text-xs text-gray-500">
+                      <p>{money(item.valor_total)}</p>
+                      <p>{money(item.valor_unitario)} un.</p>
+                    </div>
+                    <ChevronRight size={16} className="text-gray-300" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Info label="Pedido" value={form.numero_pedido} />
+                <Info label="ID cliente" value={form.codigo_cliente} />
+                <Info label="Cliente" value={form.cliente} />
+                <Info label="Vendedor" value={form.vendedor} />
+                <Info label="Produto" value={form.descricao_produto} />
+                <Info label="Codigo produto" value={form.codigo_produto} />
+                <Info label="Quantidade" value={form.quantidade} />
+                <Info label="Valor total" value={money(form.valor_total)} />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Motivo" value={form.motivo} onChange={value => update('motivo', value)} />
+                <SelectField label="Status" value={form.status} options={STATUS_OPTIONS} onChange={value => update('status', value)} />
+                <CadastroField
+                  label="Setor"
+                  icon={<Building2 size={15} />}
+                  value={form.setor}
+                  options={cadastros.setores}
+                  listId="setores-list"
+                  onChange={value => update('setor', value)}
+                  onCreate={() => createCadastro('setor')}
+                />
+                <CadastroField
+                  label="Responsavel"
+                  icon={<UserPlus size={15} />}
+                  value={form.responsavel}
+                  options={cadastros.responsaveis}
+                  listId="responsaveis-list"
+                  onChange={value => update('responsavel', value)}
+                  onCreate={() => createCadastro('responsavel')}
+                />
+                <Field label="Proxima acao" value={form.proxima_acao} onChange={value => update('proxima_acao', value)} />
+                <Field label="Agendado para" type="datetime-local" value={form.agendado_para} onChange={value => update('agendado_para', value)} />
+                <SelectField label="Prioridade" value={form.prioridade} options={[...PRIORIDADES]} onChange={value => update('prioridade', value)} />
+                <Field label="Novo pedido" value={form.novo_pedido} onChange={value => update('novo_pedido', value)} />
+                <label className="sm:col-span-2">
+                  <span className="mb-1 block text-xs font-medium text-gray-500">Descricao da situacao</span>
+                  <textarea
+                    value={form.descricao_situacao}
+                    onChange={event => update('descricao_situacao', event.target.value)}
+                    rows={4}
+                    className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 border-t border-gray-100 p-5">
+          <button
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            onClick={() => setStep(prev => Math.max(1, prev - 1))}
+            disabled={step === 1}
+          >
+            <ArrowLeft size={15} />
+            Voltar
+          </button>
+          {step < 3 ? (
+            <button
+              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+              onClick={() => setStep(prev => Math.min(3, prev + 1))}
+              disabled={(step === 1 && !pedido) || (step === 2 && !selectedItem)}
+            >
+              Continuar
+            </button>
+          ) : (
+            <button
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              onClick={save}
+              disabled={saving}
+            >
+              {saving ? <LoaderCircle size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+              Salvar
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PedidoResumo({ pedido }: { pedido: PcpPedido }) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-lg font-bold text-gray-950">#{pedido.codigo_venda}</span>
+        {pedido.situacao_erp && <StatusBadge status={pedido.situacao_erp} />}
+        {pedido.financeiro_bloqueado && <span className="rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white">Pendente financeiro</span>}
+      </div>
+      <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <Info label="ID cliente" value={pedido.codigo_cliente} />
+        <Info label="Cliente" value={pedido.nome_cliente} />
+        <Info label="Vendedor" value={pedido.vendedor} />
+        <Info label="Total pedido" value={money(pedido.valor_total)} />
+      </div>
     </div>
   )
 }
@@ -448,58 +760,6 @@ function Metric({ label, value, loading, tone = 'gray' }: { label: string; value
   )
 }
 
-function CreateModal({ form, setForm, onClose, onSave }: {
-  form: FormState
-  setForm: (form: FormState) => void
-  onClose: () => void
-  onSave: () => void
-}) {
-  function update(key: keyof FormState, value: string) {
-    setForm({ ...form, [key]: value })
-  }
-
-  return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-gray-950/30 p-4 backdrop-blur-sm" onMouseDown={onClose}>
-      <div className="max-h-full w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
-        <div className="flex items-center gap-3 border-b border-gray-100 p-5">
-          <h2 className="text-lg font-bold text-gray-950">Novo atendimento</h2>
-          <div className="flex-1" />
-          <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-        <div className="grid gap-3 p-5 sm:grid-cols-2">
-          <Field label="Data" type="date" value={form.data_solicitacao} onChange={value => update('data_solicitacao', value)} />
-          <Field label="Pedido" value={form.numero_pedido} onChange={value => update('numero_pedido', value)} />
-          <Field label="Cliente" value={form.cliente} onChange={value => update('cliente', value)} />
-          <Field label="Vendedor" value={form.vendedor} onChange={value => update('vendedor', value)} />
-          <Field label="Codigo produto" value={form.codigo_produto} onChange={value => update('codigo_produto', value)} />
-          <Field label="Produto" value={form.descricao_produto} onChange={value => update('descricao_produto', value)} />
-          <Field label="Quantidade" type="number" value={form.quantidade} onChange={value => update('quantidade', value)} />
-          <Field label="Valor total" type="number" value={form.valor_total} onChange={value => update('valor_total', value)} />
-          <Field label="Motivo" value={form.motivo} onChange={value => update('motivo', value)} />
-          <Field label="Responsavel" value={form.responsavel} onChange={value => update('responsavel', value)} />
-          <Field label="Setor" value={form.setor} onChange={value => update('setor', value)} />
-          <Field label="Agendado para" type="datetime-local" value={form.agendado_para} onChange={value => update('agendado_para', value)} />
-          <label className="sm:col-span-2">
-            <span className="mb-1 block text-xs font-medium text-gray-500">Descricao da situacao</span>
-            <textarea
-              value={form.descricao_situacao}
-              onChange={event => update('descricao_situacao', event.target.value)}
-              rows={4}
-              className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-            />
-          </label>
-        </div>
-        <div className="flex justify-end gap-2 border-t border-gray-100 p-5">
-          <button className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50" onClick={onClose}>Cancelar</button>
-          <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" onClick={onSave}>Salvar</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function Field({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
   return (
     <label>
@@ -510,6 +770,58 @@ function Field({ label, value, onChange, type = 'text' }: { label: string; value
         onChange={event => onChange(event.target.value)}
         className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
       />
+    </label>
+  )
+}
+
+function SelectField({ label, value, options, onChange }: { label: string; value: string; options: readonly string[]; onChange: (value: string) => void }) {
+  return (
+    <label>
+      <span className="mb-1 block text-xs font-medium text-gray-500">{label}</span>
+      <select
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+      >
+        {options.map(option => <option key={option} value={option}>{option}</option>)}
+      </select>
+    </label>
+  )
+}
+
+function CadastroField({ label, value, options, listId, icon, onChange, onCreate }: {
+  label: string
+  value: string
+  options: string[]
+  listId: string
+  icon: React.ReactNode
+  onChange: (value: string) => void
+  onCreate: () => void
+}) {
+  const exists = options.some(option => option.toLowerCase() === value.trim().toLowerCase())
+  return (
+    <label>
+      <span className="mb-1 block text-xs font-medium text-gray-500">{label}</span>
+      <div className="flex gap-2">
+        <input
+          list={listId}
+          value={value}
+          onChange={event => onChange(event.target.value)}
+          className="h-10 min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+        />
+        <datalist id={listId}>
+          {options.map(option => <option key={option} value={option} />)}
+        </datalist>
+        <button
+          type="button"
+          onClick={onCreate}
+          disabled={!value.trim() || exists}
+          className="grid h-10 w-10 place-items-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+          title={`Cadastrar ${label.toLowerCase()}`}
+        >
+          {icon}
+        </button>
+      </div>
     </label>
   )
 }
@@ -551,11 +863,17 @@ function dateTime(value?: string | null) {
 }
 
 function money(value?: string | number | null) {
-  const n = Number(value ?? 0)
+  if (value === null || value === undefined || value === '') return '-'
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-function formToPayload(form: FormState) {
+function round2(value: number) {
+  return Math.round(value * 100) / 100
+}
+
+function formToPayload(form: WizardForm) {
   return {
     ...form,
     quantidade: form.quantidade ? Number(form.quantidade) : null,

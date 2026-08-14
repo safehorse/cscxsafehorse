@@ -130,6 +130,51 @@ app.get('/api/dashboard', asyncRoute(async (_req, res) => {
   })
 }))
 
+app.get('/api/cadastros', asyncRoute(async (_req, res) => {
+  const [setores, responsaveis] = await Promise.all([
+    pool.query(`
+      select nome from cscx_setores where ativo = true
+      union
+      select distinct trim(setor) from cscx_atendimentos where nullif(trim(coalesce(setor, '')), '') is not null
+      order by nome
+    `),
+    pool.query(`
+      select nome from cscx_responsaveis where ativo = true
+      union
+      select distinct trim(responsavel) from cscx_atendimentos where nullif(trim(coalesce(responsavel, '')), '') is not null
+      order by nome
+    `),
+  ])
+  res.json({
+    setores: setores.rows.map(row => row.nome),
+    responsaveis: responsaveis.rows.map(row => row.nome),
+  })
+}))
+
+app.post('/api/cadastros/setores', asyncRoute(async (req, res) => {
+  const nome = stringOrNull(req.body.nome)
+  if (!nome) return res.status(400).json({ error: 'Informe o setor.' })
+  const { rows } = await pool.query(`
+    insert into cscx_setores (nome)
+    values ($1)
+    on conflict (nome) do update set ativo = true
+    returning *
+  `, [nome])
+  res.status(201).json({ data: rows[0] })
+}))
+
+app.post('/api/cadastros/responsaveis', asyncRoute(async (req, res) => {
+  const nome = stringOrNull(req.body.nome)
+  if (!nome) return res.status(400).json({ error: 'Informe o responsavel.' })
+  const { rows } = await pool.query(`
+    insert into cscx_responsaveis (nome)
+    values ($1)
+    on conflict (nome) do update set ativo = true
+    returning *
+  `, [nome])
+  res.status(201).json({ data: rows[0] })
+}))
+
 app.get('/api/atendimentos', asyncRoute(async (req, res) => {
   const search = String(req.query.search || '').trim()
   const status = String(req.query.status || '').trim()
@@ -184,10 +229,11 @@ app.post('/api/atendimentos', asyncRoute(async (req, res) => {
 
 app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   const allowed = [
-    'data_solicitacao', 'numero_pedido', 'cliente', 'codigo_produto', 'descricao_produto',
+    'data_solicitacao', 'numero_pedido', 'codigo_cliente', 'cliente', 'codigo_produto', 'descricao_produto',
     'quantidade', 'valor_unitario', 'valor_total', 'motivo', 'setor', 'responsavel',
     'proxima_acao', 'status', 'novo_pedido', 'cliente_tem_desconto', 'vendedor',
     'descricao_situacao', 'prioridade', 'agendado_para', 'concluido_em',
+    'pcp_pedido_id', 'pcp_item_id', 'pcp_payload',
   ]
   const sets = []
   const values = []
@@ -245,13 +291,14 @@ app.post('/api/agendamentos', asyncRoute(async (req, res) => {
 app.get('/api/pcp/pedidos/:codigo', asyncRoute(async (req, res) => {
   if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integracao PCP nao configurada.' })
   const codigo = encodeURIComponent(req.params.codigo)
-  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,pedido_itens(id,quantidade,produto:produto_id(nome,id_erp))')
+  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
   const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?codigo_venda=eq.${codigo}&select=${select}`, {
     headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
   })
   const data = await response.json().catch(() => [])
   if (!response.ok) return res.status(response.status).json({ error: data?.message || 'Falha ao consultar PCP.' })
-  res.json({ data: Array.isArray(data) ? data[0] || null : data })
+  const pedido = Array.isArray(data) ? data[0] || null : data
+  res.json({ data: pedido ? normalizePcpPedido(pedido) : null })
 }))
 
 app.post('/api/import/planilha', asyncRoute(async (req, res) => {
@@ -269,6 +316,7 @@ function atendimentoFromBody(body) {
   return {
     data_solicitacao: toDateOrNull(body.data_solicitacao ?? body.dataSolicitacao ?? body['DATA DA SOLI']),
     numero_pedido: stringOrNull(body.numero_pedido ?? body.numeroPedido ?? body['Nº DO PEDIDO'] ?? body['N DO PEDIDO']),
+    codigo_cliente: stringOrNull(body.codigo_cliente ?? body.codigoCliente),
     cliente: stringOrNull(body.cliente ?? body['CLIENTE']),
     codigo_produto: stringOrNull(body.codigo_produto ?? body.codigoProduto ?? body['COD. PRODUTO']),
     descricao_produto: stringOrNull(body.descricao_produto ?? body.descricaoProduto ?? body['DESCRICAO DO PRODUTO']),
@@ -288,6 +336,9 @@ function atendimentoFromBody(body) {
     origem_linha: Number.isFinite(Number(body.origem_linha ?? body.origemLinha)) ? Number(body.origem_linha ?? body.origemLinha) : null,
     prioridade: body.prioridade || 'normal',
     agendado_para: body.agendado_para || body.agendadoPara || null,
+    pcp_pedido_id: stringOrNull(body.pcp_pedido_id ?? body.pcpPedidoId),
+    pcp_item_id: stringOrNull(body.pcp_item_id ?? body.pcpItemId),
+    pcp_payload: body.pcp_payload ?? body.pcpPayload ?? null,
   }
 }
 
@@ -299,10 +350,11 @@ function stringOrNull(value) {
 
 async function upsertAtendimento(row, userId) {
   const fields = [
-    'data_solicitacao', 'numero_pedido', 'cliente', 'codigo_produto', 'descricao_produto',
+    'data_solicitacao', 'numero_pedido', 'codigo_cliente', 'cliente', 'codigo_produto', 'descricao_produto',
     'quantidade', 'valor_unitario', 'valor_total', 'motivo', 'setor', 'responsavel',
     'proxima_acao', 'status', 'novo_pedido', 'cliente_tem_desconto', 'vendedor',
     'descricao_situacao', 'origem_planilha_aba', 'origem_linha', 'prioridade', 'agendado_para',
+    'pcp_pedido_id', 'pcp_item_id', 'pcp_payload',
   ]
   const values = fields.map(field => row[field] ?? null)
   values.push(userId, userId)
@@ -324,6 +376,49 @@ async function upsertAtendimento(row, userId) {
     returning *
   `, values)
   return rows[0]
+}
+
+function normalizePcpPedido(row) {
+  const payload = row.last_webhook_payload ?? null
+  const body = payload?.body ?? payload ?? {}
+  const pedidoPayload = body.pedido ?? {}
+  const clientePayload = body.cliente ?? {}
+  const vendedorPayload = body.vendedor ?? {}
+  const itens = Array.isArray(row.pedido_itens) ? row.pedido_itens : []
+  const pedidoValorTotal = toNumberOrNull(pedidoPayload.valor_total)
+
+  return {
+    id: row.id,
+    codigo_venda: String(row.codigo_venda ?? ''),
+    codigo_cliente: stringOrNull(row.codigo_cliente ?? clientePayload.codigo),
+    nome_cliente: stringOrNull(row.nome_cliente ?? clientePayload.nome),
+    vendedor: stringOrNull(vendedorPayload.nome),
+    data_pedido: row.data_pedido ?? null,
+    data_entrega: row.data_entrega ?? null,
+    data_faturamento: row.data_faturamento ?? null,
+    situacao_erp: row.situacao_erp ?? null,
+    financeiro_bloqueado: Boolean(row.financeiro_bloqueado),
+    observacoes: row.observacoes ?? null,
+    valor_total: pedidoValorTotal,
+    itens: itens.map(item => normalizePcpItem(item, itens.length, pedidoValorTotal)),
+  }
+}
+
+function normalizePcpItem(item, itemCount, pedidoValorTotal) {
+  const produto = Array.isArray(item.produto) ? item.produto[0] : item.produto
+  const quantidade = toNumberOrNull(item.quantidade)
+  const valorTotal = itemCount === 1 ? pedidoValorTotal : null
+  const valorUnitario = valorTotal != null && quantidade ? valorTotal / quantidade : null
+  return {
+    id: item.id,
+    produto_id: item.produto_id ?? null,
+    codigo_produto: stringOrNull(produto?.id_erp),
+    descricao_produto: stringOrNull(produto?.nome),
+    quantidade,
+    valor_unitario: valorUnitario,
+    valor_total: valorTotal,
+    obs: item.obs ?? null,
+  }
 }
 
 app.use((err, _req, res, _next) => {

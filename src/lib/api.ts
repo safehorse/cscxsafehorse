@@ -1,4 +1,4 @@
-import type { Atendimento, DashboardData } from './types'
+import type { Atendimento, CadastroOptions, DashboardData, PcpPedido } from './types'
 
 const API_URL = (import.meta.env.VITE_CSCX_API_URL as string || '').replace(/\/$/, '')
 
@@ -43,6 +43,15 @@ export const api = {
   addInteracao: (getToken: () => Promise<string | null>, id: string, body: { tipo: string; descricao: string }) =>
     request(`/api/atendimentos/${id}/interacoes`, getToken, { method: 'POST', body: JSON.stringify(body) }),
 
+  cadastros: (getToken: () => Promise<string | null>) =>
+    request<CadastroOptions>('/api/cadastros', getToken),
+
+  createSetor: (getToken: () => Promise<string | null>, nome: string) =>
+    request('/api/cadastros/setores', getToken, { method: 'POST', body: JSON.stringify({ nome }) }),
+
+  createResponsavel: (getToken: () => Promise<string | null>, nome: string) =>
+    request('/api/cadastros/responsaveis', getToken, { method: 'POST', body: JSON.stringify({ nome }) }),
+
   pcpPedido: (getToken: () => Promise<string | null>, codigo: string) =>
-    request<{ data: unknown }>(`/api/pcp/pedidos/${encodeURIComponent(codigo)}`, getToken),
+    request<{ data: PcpPedido | null }>(`/api/pcp/pedidos/${encodeURIComponent(codigo)}`, getToken),
 }
