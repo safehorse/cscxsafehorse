@@ -1708,7 +1708,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
               : pedido.itens
             return (
               <div className="space-y-3">
-                <PedidoResumo pedido={pedido} />
+                <PedidoResumo pedido={pedido} hideItems />
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
@@ -1964,7 +1964,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   )
 }
 
-export function PedidoResumo({ pedido, compact = false }: { pedido: PcpPedido; compact?: boolean }) {
+export function PedidoResumo({ pedido, compact = false, hideItems = false }: { pedido: PcpPedido; compact?: boolean; hideItems?: boolean }) {
   return (
     <div className={`${compact ? 'border-blue-100 bg-white' : 'border-gray-200 bg-gray-50'} rounded-2xl border p-4`}>
       <div className="flex flex-wrap items-center gap-2">
@@ -1979,7 +1979,7 @@ export function PedidoResumo({ pedido, compact = false }: { pedido: PcpPedido; c
         <Info label="Total pedido" value={money(pedido.valor_total)} />
         <Info label="Data do pedido" value={date(pedido.data_pedido)} />
       </div>
-      {pedido.itens.length > 0 && (
+      {!hideItems && pedido.itens.length > 0 && (
         <div className="mt-3 space-y-1.5">
           {pedido.itens.map(item => (
             <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-1.5 text-xs">
