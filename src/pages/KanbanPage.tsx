@@ -305,11 +305,13 @@ export function KanbanPage() {
     <div className="flex min-h-screen flex-col bg-gray-50">
       <header className="sticky top-0 z-20 border-b border-gray-200 bg-white px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-[1440px] items-center gap-3">
-          <img src={logoSrc} alt="Safe Horse" className="h-8 object-contain" />
-          <div>
-            <h1 className="text-sm font-bold text-gray-950">Kanban CS/CX</h1>
-            <p className="text-xs text-gray-400">Chamados por status</p>
-          </div>
+          <Link to="/" className="flex items-center gap-3">
+            <img src={logoSrc} alt="Safe Horse" className="h-8 object-contain" />
+            <div>
+              <h1 className="text-sm font-bold text-gray-950">Kanban CS/CX</h1>
+              <p className="text-xs text-gray-400">Chamados por status</p>
+            </div>
+          </Link>
           <div className="flex-1" />
           <Link
             to="/"

@@ -289,11 +289,13 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
     <div className="min-h-screen bg-gray-50">
       <header className="sticky top-0 z-20 border-b border-gray-200 bg-white px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-[1320px] items-center gap-3">
-          <img src={logoSrc} alt="Safe Horse" className="h-8 object-contain" />
-          <div>
-            <h1 className="text-sm font-bold text-gray-950">CS/CX Safe Horse</h1>
-            <p className="text-xs text-gray-400">Sucesso do Cliente 2026</p>
-          </div>
+          <Link to="/" className="flex items-center gap-3">
+            <img src={logoSrc} alt="Safe Horse" className="h-8 object-contain" />
+            <div>
+              <h1 className="text-sm font-bold text-gray-950">CS/CX Safe Horse</h1>
+              <p className="text-xs text-gray-400">Sucesso do Cliente 2026</p>
+            </div>
+          </Link>
           <div className="flex-1" />
           {isChamadosPage && (
             <Link
@@ -613,8 +615,9 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
           onClose={() => setShowCreate(false)}
           onSaved={(data) => {
             setShowCreate(false)
-            setAtendimentos(prev => [data, ...prev])
-            toast.success('Atendimento criado.')
+            const alreadyExisted = atendimentos.some(item => item.id === data.id)
+            setAtendimentos(prev => alreadyExisted ? prev.map(item => item.id === data.id ? { ...item, ...data } : item) : [data, ...prev])
+            toast.success(alreadyExisted ? 'Chamado vinculado ao existente.' : 'Atendimento criado.')
             load()
           }}
         />
@@ -1287,6 +1290,20 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
     applyItems(next)
   }
 
+  function updateItemQuantity(itemId: string, quantidade: number) {
+    const max = pedido?.itens.find(candidate => candidate.id === itemId)?.quantidade ?? undefined
+    const clamped = Math.min(Math.max(1, Math.round(quantidade) || 1), max ?? Infinity)
+    const next = selectedItems.map(item => {
+      if (item.id !== itemId) return item
+      return {
+        ...item,
+        quantidade: clamped,
+        valor_total: item.valor_unitario != null ? round2(item.valor_unitario * clamped) : item.valor_total,
+      }
+    })
+    applyItems(next)
+  }
+
   async function buscarPedido(codigoOverride?: string) {
     const codigo = (codigoOverride ?? codigoBusca).trim()
     if (!codigo) return
@@ -1433,13 +1450,34 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
 
     setSaving(true)
     try {
-      const { data } = await api.createAtendimento(getToken, {
-        ...formToPayload(form),
-        pcp_pedido_id: pedido.id,
-        pcp_item_id: selectedItems.length === 1 ? selectedItems[0].id : null,
-        pcp_payload: { pedido, itens: selectedItems },
-      })
-      onSaved(data)
+      if (existingChamado) {
+        const produtoId = selectedItems[0]?.id ?? ''
+        const produtoDescricao = form.descricao_produto || null
+        if (existingChamado.status === 'FINALIZADO') {
+          await api.reabrirAtendimento(getToken, existingChamado.id, {
+            motivo: form.motivo,
+            produto_id: produtoId,
+            produto_descricao: produtoDescricao,
+          })
+        } else {
+          await api.addInteracao(getToken, existingChamado.id, {
+            tipo: 'nota',
+            descricao: `Vinculado via novo chamado do mesmo pedido: ${form.motivo}`,
+            produto_id: produtoId,
+            produto_descricao: produtoDescricao,
+          })
+        }
+        const { data } = await api.atendimento(getToken, existingChamado.id)
+        onSaved(data)
+      } else {
+        const { data } = await api.createAtendimento(getToken, {
+          ...formToPayload(form),
+          pcp_pedido_id: pedido.id,
+          pcp_item_id: selectedItems.length === 1 ? selectedItems[0].id : null,
+          pcp_payload: { pedido, itens: selectedItems },
+        })
+        onSaved(data)
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao criar atendimento.')
     } finally {
@@ -1613,9 +1651,13 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
               )}
               {pedido && <PedidoResumo pedido={pedido} />}
               {existingChamado && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-sm font-semibold text-amber-800">Esse pedido já tem um chamado (status: {existingChamado.status}).</p>
-                  <p className="mt-1 text-xs text-amber-700">Use o histórico do chamado existente em vez de criar outro. Se ele estiver finalizado, abra e use "Reabrir chamado".</p>
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                  <p className="text-sm font-semibold text-blue-800">Esse pedido já tem um chamado (status: {existingChamado.status}).</p>
+                  <p className="mt-1 text-xs text-blue-700">
+                    {existingChamado.status === 'FINALIZADO'
+                      ? 'Ao continuar, o chamado existente será reaberto automaticamente com o motivo e produto informados aqui.'
+                      : 'Ao continuar, essas informações serão adicionadas ao histórico do chamado existente em vez de criar um novo.'}
+                  </p>
                 </div>
               )}
             </div>
@@ -1669,27 +1711,46 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
                     <div className="px-4 py-6 text-center text-sm text-gray-400">Nenhum produto encontrado</div>
                   )}
                   {filteredItems.map(item => {
-                    const checked = selectedItems.some(selected => selected.id === item.id)
+                    const selectedItem = selectedItems.find(selected => selected.id === item.id)
+                    const checked = Boolean(selectedItem)
                     return (
-                      <button
+                      <div
                         key={item.id}
-                        type="button"
-                        onClick={() => toggleItem(item)}
-                        className={`flex w-full items-center gap-4 px-4 py-3 text-left transition-colors ${checked ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}
+                        className={`flex w-full items-center gap-4 px-4 py-3 transition-colors ${checked ? 'bg-blue-50' : ''}`}
                       >
-                        <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border text-white ${checked ? 'border-blue-600 bg-blue-600' : 'border-gray-300 bg-white'}`}>
-                          {checked && <CheckCircle2 size={14} />}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-gray-950">{item.descricao_produto ?? 'Produto sem nome'}</p>
-                          <p className="text-xs text-gray-400">ERP {item.codigo_produto ?? '-'} - Qtd {item.quantidade ?? '-'}</p>
-                        </div>
-                        <div className="text-right text-xs text-gray-500">
-                          <p>{money(item.valor_total)}</p>
+                        <button
+                          type="button"
+                          onClick={() => toggleItem(item)}
+                          className="flex min-w-0 flex-1 items-center gap-4 text-left"
+                        >
+                          <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border text-white ${checked ? 'border-blue-600 bg-blue-600' : 'border-gray-300 bg-white'}`}>
+                            {checked && <CheckCircle2 size={14} />}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-gray-950">{item.descricao_produto ?? 'Produto sem nome'}</p>
+                            <p className="text-xs text-gray-400">ERP {item.codigo_produto ?? '-'} - Pedido: {item.quantidade ?? '-'} un.</p>
+                          </div>
+                        </button>
+                        {checked && (
+                          <label className="flex shrink-0 flex-col items-center gap-0.5">
+                            <span className="text-[10px] font-semibold uppercase text-gray-400">Qtd chamado</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={item.quantidade ?? undefined}
+                              value={selectedItem?.quantidade ?? item.quantidade ?? 1}
+                              onClick={event => event.stopPropagation()}
+                              onChange={event => updateItemQuantity(item.id, Number(event.target.value))}
+                              className="w-16 rounded-lg border border-gray-200 px-2 py-1 text-right text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                            />
+                          </label>
+                        )}
+                        <div className="shrink-0 text-right text-xs text-gray-500">
+                          <p>{money(selectedItem?.valor_total ?? item.valor_total)}</p>
                           <p>{money(item.valor_unitario)} un.</p>
                         </div>
                         <p className="shrink-0 text-right text-[10px] text-gray-300">ID {item.id}</p>
-                      </button>
+                      </div>
                     )
                   })}
                 </div>
@@ -1799,7 +1860,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
             <button
               className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
               onClick={() => setStep(prev => Math.min(3, prev + 1))}
-              disabled={(step === 1 && (!pedido || Boolean(existingChamado))) || (step === 2 && !selectedItems.length)}
+              disabled={(step === 1 && !pedido) || (step === 2 && !selectedItems.length)}
             >
               Continuar
             </button>
