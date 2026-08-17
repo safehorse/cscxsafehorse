@@ -1215,6 +1215,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   }
   const [pedido, setPedido] = useState<PcpPedido | null>(null)
   const [selectedItems, setSelectedItems] = useState<PcpPedidoItem[]>([])
+  const [itemQuery, setItemQuery] = useState('')
   const [form, setForm] = useState<WizardForm>(emptyWizard)
   const [loadingPedido, setLoadingPedido] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -1244,6 +1245,7 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
   function applyPedido(next: PcpPedido) {
     setPedido(next)
     setSelectedItems([])
+    setItemQuery('')
     setExistingChamado(null)
     checkExistingChamado(next.codigo_venda)
     setForm(prev => ({
@@ -1619,58 +1621,81 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
             </div>
           )}
 
-          {step === 2 && pedido && (
-            <div className="space-y-3">
-              <PedidoResumo pedido={pedido} />
-              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
-                <PackageSearch size={16} className="text-blue-600" />
-                <p className="text-sm font-semibold text-blue-950">
-                  {selectedItems.length} produto{selectedItems.length !== 1 ? 's' : ''} selecionado{selectedItems.length !== 1 ? 's' : ''}
-                </p>
-                <div className="flex-1" />
-                <button
-                  type="button"
-                  onClick={() => applyItems(pedido.itens, pedido)}
-                  className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                >
-                  Selecionar todos
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyItems([], pedido)}
-                  disabled={!selectedItems.length}
-                  className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-40"
-                >
-                  Limpar
-                </button>
+          {step === 2 && pedido && (() => {
+            const query = itemQuery.trim().toLowerCase()
+            const filteredItems = query
+              ? pedido.itens.filter(item =>
+                  (item.descricao_produto ?? '').toLowerCase().includes(query) ||
+                  (item.codigo_produto ?? '').toLowerCase().includes(query) ||
+                  (item.id ?? '').toLowerCase().includes(query)
+                )
+              : pedido.itens
+            return (
+              <div className="space-y-3">
+                <PedidoResumo pedido={pedido} />
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={itemQuery}
+                    onChange={event => setItemQuery(event.target.value)}
+                    placeholder="Buscar produto por nome, codigo ou id"
+                    className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                  <PackageSearch size={16} className="text-blue-600" />
+                  <p className="text-sm font-semibold text-blue-950">
+                    {selectedItems.length} produto{selectedItems.length !== 1 ? 's' : ''} selecionado{selectedItems.length !== 1 ? 's' : ''}
+                  </p>
+                  <div className="flex-1" />
+                  <button
+                    type="button"
+                    onClick={() => applyItems(filteredItems, pedido)}
+                    className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                  >
+                    Selecionar todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyItems([], pedido)}
+                    disabled={!selectedItems.length}
+                    className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-40"
+                  >
+                    Limpar
+                  </button>
+                </div>
+                <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200">
+                  {filteredItems.length === 0 && (
+                    <div className="px-4 py-6 text-center text-sm text-gray-400">Nenhum produto encontrado</div>
+                  )}
+                  {filteredItems.map(item => {
+                    const checked = selectedItems.some(selected => selected.id === item.id)
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => toggleItem(item)}
+                        className={`flex w-full items-center gap-4 px-4 py-3 text-left transition-colors ${checked ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}
+                      >
+                        <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border text-white ${checked ? 'border-blue-600 bg-blue-600' : 'border-gray-300 bg-white'}`}>
+                          {checked && <CheckCircle2 size={14} />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-gray-950">{item.descricao_produto ?? 'Produto sem nome'}</p>
+                          <p className="text-xs text-gray-400">ERP {item.codigo_produto ?? '-'} - Qtd {item.quantidade ?? '-'}</p>
+                        </div>
+                        <div className="text-right text-xs text-gray-500">
+                          <p>{money(item.valor_total)}</p>
+                          <p>{money(item.valor_unitario)} un.</p>
+                        </div>
+                        <p className="shrink-0 text-right text-[10px] text-gray-300">ID {item.id}</p>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-              <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200">
-                {pedido.itens.map(item => {
-                  const checked = selectedItems.some(selected => selected.id === item.id)
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => toggleItem(item)}
-                      className={`flex w-full items-center gap-4 px-4 py-3 text-left transition-colors ${checked ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}
-                    >
-                      <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border text-white ${checked ? 'border-blue-600 bg-blue-600' : 'border-gray-300 bg-white'}`}>
-                        {checked && <CheckCircle2 size={14} />}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-gray-950">{item.descricao_produto ?? 'Produto sem nome'}</p>
-                        <p className="text-xs text-gray-400">ERP {item.codigo_produto ?? '-'} - Qtd {item.quantidade ?? '-'}</p>
-                      </div>
-                      <div className="text-right text-xs text-gray-500">
-                        <p>{money(item.valor_total)}</p>
-                        <p>{money(item.valor_unitario)} un.</p>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
+            )
+          })()}
 
           {step === 3 && (
             <div className="space-y-5">
