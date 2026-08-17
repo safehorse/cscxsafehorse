@@ -57,6 +57,10 @@ function toNumberOrNull(value) {
   return Number.isFinite(n) ? n : null
 }
 
+function round2(value) {
+  return Math.round(value * 100) / 100
+}
+
 function toDateOrNull(value) {
   if (!value) return null
   if (value instanceof Date) return value.toISOString().slice(0, 10)
@@ -902,7 +906,7 @@ app.get('/api/pcp/produtos', asyncRoute(async (req, res) => {
 app.get('/api/pcp/pedidos/:codigo', asyncRoute(async (req, res) => {
   if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
   const codigo = encodeURIComponent(normalizePedidoCodigo(req.params.codigo))
-  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,vendedor:vendedor_id(nome),last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
+  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,vendedor:vendedor_id(nome),last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp,valor_vista,valor_prazo))')
   const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?codigo_venda=eq.${codigo}&select=${select}`, {
     headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
   })
@@ -942,7 +946,7 @@ app.post('/api/pcp/pedidos/:codigo/sync', asyncRoute(async (req, res) => {
 
   if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
   const codigo = encodeURIComponent(numero)
-  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,vendedor:vendedor_id(nome),last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
+  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,vendedor:vendedor_id(nome),last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp,valor_vista,valor_prazo))')
   const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?codigo_venda=eq.${codigo}&select=${select}`, {
     headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
   })
@@ -959,7 +963,7 @@ app.get('/api/pcp/clientes/:codigoCliente/pedidos', asyncRoute(async (req, res) 
   if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
   const codigo = encodeURIComponent(String(req.params.codigoCliente || '').trim())
   if (!codigo) return res.json({ data: [] })
-  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,vendedor:vendedor_id(nome),last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp))')
+  const select = encodeURIComponent('id,codigo_venda,codigo_cliente,nome_cliente,data_pedido,data_entrega,data_faturamento,situacao_erp,financeiro_bloqueado,observacoes,vendedor_id,vendedor:vendedor_id(nome),last_webhook_payload,pedido_itens(id,produto_id,quantidade,obs,produto:produto_id(nome,id_erp,valor_vista,valor_prazo))')
   const response = await fetch(`${PCP_API_URL}/rest/v1/pedidos?codigo_cliente=eq.${codigo}&select=${select}&order=data_pedido.desc&limit=20`, {
     headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
   })
@@ -1372,8 +1376,16 @@ function normalizePcpPedido(row) {
 function normalizePcpItem(item, itemCount, pedidoValorTotal) {
   const produto = Array.isArray(item.produto) ? item.produto[0] : item.produto
   const quantidade = toNumberOrNull(item.quantidade)
-  const valorTotal = itemCount === 1 ? pedidoValorTotal : null
-  const valorUnitario = valorTotal != null && quantidade ? valorTotal / quantidade : null
+  // Preço vem do cadastro do produto no PCP (valor_vista, com valor_prazo
+  // como fallback quando o produto não tem preço à vista definido). É o
+  // preço atual do catálogo, não necessariamente o preço da venda original.
+  const produtoValorUnitario = toNumberOrNull(produto?.valor_vista) || toNumberOrNull(produto?.valor_prazo) || null
+  let valorUnitario = produtoValorUnitario
+  let valorTotal = valorUnitario != null && quantidade != null ? round2(valorUnitario * quantidade) : null
+  if (valorTotal == null && itemCount === 1) {
+    valorTotal = pedidoValorTotal
+    valorUnitario = valorTotal != null && quantidade ? valorTotal / quantidade : null
+  }
   return {
     id: item.id,
     produto_id: item.produto_id ?? null,
