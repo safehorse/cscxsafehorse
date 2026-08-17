@@ -22,6 +22,7 @@ import {
   Plus,
   Save,
   Search,
+  Trash2,
   UserPlus,
   UsersRound,
   X,
@@ -257,6 +258,19 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao reabrir chamado.')
       throw error
+    }
+  }
+
+  async function deleteChamado() {
+    if (!selected) return
+    try {
+      await api.deleteAtendimento(getToken, selected.id)
+      setAtendimentos(prev => prev.filter(item => item.id !== selected.id))
+      setSelected(null)
+      toast.success('Chamado excluído.')
+      load()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao excluir chamado.')
     }
   }
 
@@ -604,6 +618,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
           onLoadPedido={loadPedidoFromPcp}
           onSyncPedido={syncPedidoFromPcp}
           onReabrir={reabrirChamado}
+          onDelete={deleteChamado}
         />
       )}
 
@@ -628,7 +643,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
   )
 }
 
-export function DetailDrawer({ selected, loading, note, setNote, getToken, cadastros, onCadastroChanged, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido, onSyncPedido, onReabrir }: {
+export function DetailDrawer({ selected, loading, note, setNote, getToken, cadastros, onCadastroChanged, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido, onSyncPedido, onReabrir, onDelete }: {
   selected: Atendimento
   loading: boolean
   note: string
@@ -644,8 +659,10 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   onLoadPedido: () => Promise<PcpPedido | null>
   onSyncPedido: () => Promise<PcpPedido | null>
   onReabrir: (motivo: string, produtoId: string, produtoDescricao: string | null) => Promise<void>
+  onDelete: () => Promise<void>
 }) {
   const [closing, setClosing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [draftStatus, setDraftStatus] = useState(selected.status)
   const [savingStatus, setSavingStatus] = useState(false)
   const [showReembolso, setShowReembolso] = useState(Boolean(selected.reembolso_valor || selected.reembolso_motivo))
@@ -820,6 +837,23 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
             >
               <Pencil size={14} />
               {editing ? 'Cancelar' : 'Editar'}
+            </button>
+            <button
+              type="button"
+              disabled={deleting}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 px-3 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+              onClick={async () => {
+                if (!window.confirm(`Excluir o chamado do pedido #${selected.numero_pedido ?? ''} definitivamente? Essa ação não pode ser desfeita.`)) return
+                setDeleting(true)
+                try {
+                  await onDelete()
+                } finally {
+                  setDeleting(false)
+                }
+              }}
+            >
+              {deleting ? <LoaderCircle size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              Excluir
             </button>
             <button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100" onClick={requestClose}>
               <X size={18} />

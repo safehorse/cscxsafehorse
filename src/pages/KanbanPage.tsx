@@ -187,6 +187,18 @@ export function KanbanPage() {
     }
   }
 
+  async function deleteChamado() {
+    if (!selected) return
+    try {
+      await api.deleteAtendimento(getToken, selected.id)
+      setItems(prev => prev.filter(item => item.id !== selected.id))
+      setSelected(null)
+      toast.success('Chamado excluído.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao excluir chamado.')
+    }
+  }
+
   async function loadPedidoFromPcp() {
     if (!selected?.numero_pedido) return null
     try {
@@ -519,6 +531,7 @@ export function KanbanPage() {
           onLoadPedido={loadPedidoFromPcp}
           onSyncPedido={syncPedidoFromPcp}
           onReabrir={reabrirChamado}
+          onDelete={deleteChamado}
         />
       )}
     </div>

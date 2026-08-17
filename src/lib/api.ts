@@ -97,6 +97,9 @@ export const api = {
   updateAtendimento: (getToken: () => Promise<string | null>, id: string, body: Partial<Atendimento>) =>
     request<{ data: Atendimento }>(`/api/atendimentos/${id}`, getToken, { method: 'PATCH', body: JSON.stringify(body) }),
 
+  deleteAtendimento: (getToken: () => Promise<string | null>, id: string) =>
+    request<void>(`/api/atendimentos/${id}`, getToken, { method: 'DELETE' }),
+
   addInteracao: (getToken: () => Promise<string | null>, id: string, body: { tipo: string; descricao: string; produto_id?: string | null; produto_descricao?: string | null }) =>
     request(`/api/atendimentos/${id}/interacoes`, getToken, { method: 'POST', body: JSON.stringify(body) }),
 

@@ -605,6 +605,12 @@ app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   res.json({ data: rows[0] })
 }))
 
+app.delete('/api/atendimentos/:id', asyncRoute(async (req, res) => {
+  const { rows } = await pool.query('delete from cscx_atendimentos where id = $1 returning id', [req.params.id])
+  if (!rows[0]) return res.status(404).json({ error: 'Atendimento não encontrado.' })
+  res.status(204).end()
+}))
+
 app.post('/api/atendimentos/:id/reabrir', asyncRoute(async (req, res) => {
   const motivo = stringOrNull(req.body.motivo)
   const produtoId = stringOrNull(req.body.produto_id)
