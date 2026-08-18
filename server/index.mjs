@@ -224,21 +224,39 @@ app.get('/api/dashboard', asyncRoute(async (req, res) => {
 app.get('/api/cadastros', asyncRoute(async (_req, res) => {
   const [setores, responsaveis, proximasAcoes] = await Promise.all([
     pool.query(`
-      select nome from cscx_setores where ativo = true
-      union
-      select distinct trim(setor) from cscx_atendimentos where nullif(trim(coalesce(setor, '')), '') is not null
+      select nome from (
+        select distinct on (lower(trim(regexp_replace(nome, '\\s+', ' ', 'g')))) nome
+        from (
+          select nome, 1 as priority from cscx_setores where ativo = true
+          union all
+          select distinct trim(setor), 2 from cscx_atendimentos where nullif(trim(coalesce(setor, '')), '') is not null
+        ) x
+        order by lower(trim(regexp_replace(nome, '\\s+', ' ', 'g'))), priority, nome
+      ) y
       order by nome
     `),
     pool.query(`
-      select nome from cscx_responsaveis where ativo = true
-      union
-      select distinct trim(responsavel) from cscx_atendimentos where nullif(trim(coalesce(responsavel, '')), '') is not null
+      select nome from (
+        select distinct on (lower(trim(regexp_replace(nome, '\\s+', ' ', 'g')))) nome
+        from (
+          select nome, 1 as priority from cscx_responsaveis where ativo = true
+          union all
+          select distinct trim(responsavel), 2 from cscx_atendimentos where nullif(trim(coalesce(responsavel, '')), '') is not null
+        ) x
+        order by lower(trim(regexp_replace(nome, '\\s+', ' ', 'g'))), priority, nome
+      ) y
       order by nome
     `),
     pool.query(`
-      select nome from cscx_proximas_acoes where ativo = true
-      union
-      select distinct trim(proxima_acao) from cscx_atendimentos where nullif(trim(coalesce(proxima_acao, '')), '') is not null
+      select nome from (
+        select distinct on (lower(trim(regexp_replace(nome, '\\s+', ' ', 'g')))) nome
+        from (
+          select nome, 1 as priority from cscx_proximas_acoes where ativo = true
+          union all
+          select distinct trim(proxima_acao), 2 from cscx_atendimentos where nullif(trim(coalesce(proxima_acao, '')), '') is not null
+        ) x
+        order by lower(trim(regexp_replace(nome, '\\s+', ' ', 'g'))), priority, nome
+      ) y
       order by nome
     `),
   ])
@@ -447,7 +465,7 @@ app.post('/api/cadastros/setores', asyncRoute(async (req, res) => {
   const { rows } = await pool.query(`
     insert into cscx_setores (nome)
     values ($1)
-    on conflict (nome) do update set ativo = true
+    on conflict (nome_normalizado) do update set ativo = true
     returning *
   `, [nome])
   res.status(201).json({ data: rows[0] })
@@ -459,7 +477,7 @@ app.post('/api/cadastros/responsaveis', asyncRoute(async (req, res) => {
   const { rows } = await pool.query(`
     insert into cscx_responsaveis (nome)
     values ($1)
-    on conflict (nome) do update set ativo = true
+    on conflict (nome_normalizado) do update set ativo = true
     returning *
   `, [nome])
   res.status(201).json({ data: rows[0] })
@@ -471,7 +489,7 @@ app.post('/api/cadastros/proximas-acoes', asyncRoute(async (req, res) => {
   const { rows } = await pool.query(`
     insert into cscx_proximas_acoes (nome)
     values ($1)
-    on conflict (nome) do update set ativo = true
+    on conflict (nome_normalizado) do update set ativo = true
     returning *
   `, [nome])
   res.status(201).json({ data: rows[0] })
