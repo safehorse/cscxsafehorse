@@ -143,9 +143,9 @@ export function KanbanPage() {
       })
       setSelected(prev => prev ? { ...prev, ...data } : data)
       setItems(prev => prev.map(item => item.id === data.id ? { ...item, ...data } : item))
-      toast.success('Reembolso salvo.')
+      toast.success('Crédito salvo.')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Falha ao salvar reembolso.')
+      toast.error(error instanceof Error ? error.message : 'Falha ao salvar crédito.')
     }
   }
 

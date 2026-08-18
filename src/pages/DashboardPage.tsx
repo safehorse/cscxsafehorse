@@ -214,10 +214,10 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
       })
       setSelected(prev => prev ? { ...prev, ...data } : data)
       setAtendimentos(prev => prev.map(item => item.id === data.id ? { ...item, ...data } : item))
-      toast.success('Reembolso salvo.')
+      toast.success('Crédito salvo.')
       load()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Falha ao salvar reembolso.')
+      toast.error(error instanceof Error ? error.message : 'Falha ao salvar crédito.')
     }
   }
 
@@ -386,8 +386,8 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <Metric label="Atendimentos hoje" value={dashboard?.totais.atendimentos_hoje ?? 0} loading={loading} />
                 <Metric label="Solucionados" value={dashboard?.totais.solucionados ?? 0} loading={loading} tone="emerald" />
-                <Metric label="Reembolsados" value={dashboard?.totais.reembolsados ?? 0} loading={loading} tone="amber" />
-                <Metric label="Valor reembolsado" value={money(dashboard?.totais.valor_reembolso)} loading={loading} tone="blue" />
+                <Metric label="Creditados" value={dashboard?.totais.reembolsados ?? 0} loading={loading} tone="amber" />
+                <Metric label="Valor creditado" value={money(dashboard?.totais.valor_reembolso)} loading={loading} tone="blue" />
               </div>
 
               <AtendimentosPorDataChart rows={dashboard?.por_data ?? []} loading={loading} />
@@ -500,7 +500,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
                           <StatusBadge status={item.status} />
                           <PriorityBadge value={item.prioridade} />
                           {(item.reembolso_valor || item.reembolso_motivo) && (
-                            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Reembolso</span>
+                            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Crédito</span>
                           )}
                         </div>
                         <p className="mt-1 truncate text-sm text-gray-600">{item.cliente ?? 'Cliente não informado'}</p>
@@ -717,8 +717,8 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
 
   async function saveRefund() {
     const valor = reembolsoValor.trim() ? Number(reembolsoValor.replace(',', '.')) : null
-    if (valor !== null && !Number.isFinite(valor)) return toast.warning('Informe um valor de reembolso válido.')
-    if ((valor !== null || reembolsoMotivo.trim()) && !reembolsoMotivo.trim()) return toast.warning('Informe o motivo do reembolso.')
+    if (valor !== null && !Number.isFinite(valor)) return toast.warning('Informe um valor de crédito válido.')
+    if ((valor !== null || reembolsoMotivo.trim()) && !reembolsoMotivo.trim()) return toast.warning('Informe o motivo do crédito.')
     setSavingReembolso(true)
     try {
       await onSaveReembolso(valor, reembolsoMotivo)
@@ -963,7 +963,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                   <Info label="Quantidade" value={selected.quantidade?.toString()} />
                   <Info label="Valor unitario" value={money(selected.valor_unitario)} />
                   <Info label="Valor total" value={money(selected.valor_total)} />
-                  <Info label="Valor reembolso" value={money(selected.reembolso_valor)} />
+                  <Info label="Valor crédito" value={money(selected.reembolso_valor)} />
                   <Info label="Setor" value={selected.setor} />
                   <Info label="Responsável" value={selected.responsavel} />
                   <Info label="Vendedor" value={selected.vendedor} />
@@ -1030,7 +1030,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
               <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-semibold text-amber-950">Reembolso</h3>
+                    <h3 className="text-sm font-semibold text-amber-950">Crédito</h3>
                     <p className="text-xs text-amber-700">Valor e motivo preenchidos manualmente.</p>
                   </div>
                   {selected.reembolso_em && <span className="text-xs font-semibold text-amber-700">{dateTime(selected.reembolso_em)}</span>}
@@ -1051,7 +1051,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                     <input
                       value={reembolsoMotivo}
                       onChange={event => setReembolsoMotivo(event.target.value)}
-                      placeholder="Motivo do reembolso..."
+                      placeholder="Motivo do crédito..."
                       className="h-10 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                     />
                   </label>
@@ -1064,7 +1064,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                     className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
                   >
                     {savingReembolso ? <LoaderCircle size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-                    Salvar reembolso
+                    Salvar crédito
                   </button>
                 </div>
               </section>
@@ -1100,7 +1100,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                 className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"
               >
                 <Plus size={13} />
-                Reembolso
+                Crédito
               </button>
               <button
                 type="button"
