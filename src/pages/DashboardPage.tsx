@@ -899,6 +899,11 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                     className="sm:col-span-2"
                     descricaoProduto={editForm.descricao_produto}
                     codigoProduto={editForm.codigo_produto}
+                    onRemove={index => {
+                      const result = removeProduto(editForm.descricao_produto, editForm.codigo_produto, index)
+                      if (!result) return
+                      setEditForm(prev => ({ ...prev, ...result }))
+                    }}
                   />
                   <Field label="Quantidade" value={editForm.quantidade} onChange={value => updateEdit('quantidade', value)} />
                   <Field label="Valor unitário" value={editForm.valor_unitario} onChange={value => updateEdit('valor_unitario', value)} />
@@ -2289,9 +2294,10 @@ function Info({ label, value }: { label: string; value: string | null | undefine
   )
 }
 
-function ProdutoList({ descricaoProduto, codigoProduto, className = '' }: { descricaoProduto?: string | null; codigoProduto?: string | null; className?: string }) {
+function ProdutoList({ descricaoProduto, codigoProduto, className = '', onRemove }: { descricaoProduto?: string | null; codigoProduto?: string | null; className?: string; onRemove?: (index: number) => void }) {
   const produtos = parseProdutos(descricaoProduto, codigoProduto)
     ?? [{ descricao: descricaoProduto ?? '', codigo: codigoProduto ?? '' }]
+  const canRemove = Boolean(onRemove) && produtos.length > 1
 
   return (
     <div className={`rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 ${className}`}>
@@ -2301,6 +2307,20 @@ function ProdutoList({ descricaoProduto, codigoProduto, className = '' }: { desc
           <div key={index} className="flex items-center justify-between gap-3 py-1.5 first:pt-0 last:pb-0">
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800">{produto.descricao || '-'}</span>
             <span className="shrink-0 text-xs text-gray-400">ERP {produto.codigo || '-'}</span>
+            {canRemove && (
+              <button
+                type="button"
+                title="Remover produto do chamado"
+                onClick={() => {
+                  if (window.confirm(`Remover "${produto.descricao || 'este produto'}" do chamado? Confira a quantidade e o valor total depois de remover.`)) {
+                    onRemove?.(index)
+                  }
+                }}
+                className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -2354,6 +2374,18 @@ function parseProdutos(descricaoProduto?: string | null, codigoProduto?: string 
   const descricoes = match[2].split(' | ')
   const codigos = (codigoProduto ?? '').split(', ')
   return descricoes.map((descricao, index) => ({ descricao, codigo: codigos[index] ?? '' }))
+}
+
+function removeProduto(descricaoProduto: string | null | undefined, codigoProduto: string | null | undefined, indexToRemove: number) {
+  const produtos = parseProdutos(descricaoProduto, codigoProduto)
+  if (!produtos) return null
+  const remaining = produtos.filter((_, index) => index !== indexToRemove)
+  const descricoes = remaining.map(produto => produto.descricao)
+  const codigos = remaining.map(produto => produto.codigo)
+  return {
+    descricao_produto: remaining.length > 1 ? `${remaining.length} produtos: ${descricoes.join(' | ')}` : (descricoes[0] ?? ''),
+    codigo_produto: codigos.join(', '),
+  }
 }
 
 function summarizeItems(items: PcpPedidoItem[]) {
