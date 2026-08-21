@@ -906,8 +906,8 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                     }}
                   />
                   <Field label="Quantidade" value={editForm.quantidade} onChange={value => updateEdit('quantidade', value)} />
-                  <Field label="Valor unitário" value={editForm.valor_unitario} onChange={value => updateEdit('valor_unitario', value)} />
-                  <Field label="Valor total" value={editForm.valor_total} onChange={value => updateEdit('valor_total', value)} />
+                  <MoneyField label="Valor unitário" value={editForm.valor_unitario} onChange={value => updateEdit('valor_unitario', value)} />
+                  <MoneyField label="Valor total" value={editForm.valor_total} onChange={value => updateEdit('valor_total', value)} />
                   <Field label="Vendedor" value={editForm.vendedor} onChange={value => updateEdit('vendedor', value)} />
                   <Field label="Motivo" value={editForm.motivo} onChange={value => updateEdit('motivo', value)} />
                   <SelectField label="Status" value={editForm.status} options={STATUS_OPTIONS} onChange={value => updateEdit('status', value)} />
@@ -1047,16 +1047,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                   {selected.reembolso_em && <span className="text-xs font-semibold text-amber-700">{dateTime(selected.reembolso_em)}</span>}
                 </div>
                 <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
-                  <label>
-                    <span className="mb-1 block text-xs font-medium text-amber-800">Valor</span>
-                    <input
-                      value={reembolsoValor}
-                      onChange={event => setReembolsoValor(event.target.value)}
-                      placeholder="0,00"
-                      inputMode="decimal"
-                      className="h-10 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-                    />
-                  </label>
+                  <MoneyField label="Valor" value={reembolsoValor} onChange={setReembolsoValor} />
                   <label>
                     <span className="mb-1 block text-xs font-medium text-amber-800">Motivo</span>
                     <input
@@ -2137,6 +2128,35 @@ function Field({ label, value, onChange, type = 'text' }: { label: string; value
         onChange={event => onChange(event.target.value)}
         className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
       />
+    </label>
+  )
+}
+
+function MoneyField({ label, value, onChange, placeholder = '0,00' }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string }) {
+  const display = (() => {
+    if (!value) return ''
+    const n = Number(value)
+    return Number.isFinite(n) ? n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''
+  })()
+
+  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const digits = event.target.value.replace(/\D/g, '')
+    onChange(digits ? (Number(digits) / 100).toFixed(2) : '')
+  }
+
+  return (
+    <label>
+      <span className="mb-1 block text-xs font-medium text-gray-500">{label}</span>
+      <div className="flex h-10 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+        <span className="shrink-0 text-sm text-gray-400">R$</span>
+        <input
+          value={display}
+          onChange={handleChange}
+          inputMode="decimal"
+          placeholder={placeholder}
+          className="h-full w-full bg-transparent text-sm outline-none"
+        />
+      </div>
     </label>
   )
 }
