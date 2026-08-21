@@ -895,8 +895,11 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                   <Field label="Número do pedido" value={editForm.numero_pedido} onChange={value => updateEdit('numero_pedido', value)} />
                   <Field label="ID cliente" value={editForm.codigo_cliente} onChange={value => updateEdit('codigo_cliente', value)} />
                   <Field label="Cliente" value={editForm.cliente} onChange={value => updateEdit('cliente', value)} />
-                  <Field label="Código produto" value={editForm.codigo_produto} onChange={value => updateEdit('codigo_produto', value)} />
-                  <Field label="Produto" value={editForm.descricao_produto} onChange={value => updateEdit('descricao_produto', value)} />
+                  <ProdutoList
+                    className="sm:col-span-2"
+                    descricaoProduto={editForm.descricao_produto}
+                    codigoProduto={editForm.codigo_produto}
+                  />
                   <Field label="Quantidade" value={editForm.quantidade} onChange={value => updateEdit('quantidade', value)} />
                   <Field label="Valor unitário" value={editForm.valor_unitario} onChange={value => updateEdit('valor_unitario', value)} />
                   <Field label="Valor total" value={editForm.valor_total} onChange={value => updateEdit('valor_total', value)} />
@@ -958,8 +961,11 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
               <>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Info label="ID cliente" value={selected.codigo_cliente} />
-                  <Info label="Produto" value={selected.descricao_produto} />
-                  <Info label="Código produto" value={selected.codigo_produto} />
+                  <ProdutoList
+                    className="sm:col-span-2"
+                    descricaoProduto={selected.descricao_produto}
+                    codigoProduto={selected.codigo_produto}
+                  />
                   <Info label="Quantidade" value={selected.quantidade?.toString()} />
                   <Info label="Valor unitario" value={money(selected.valor_unitario)} />
                   <Info label="Valor total" value={money(selected.valor_total)} />
@@ -1799,8 +1805,9 @@ function CreateWizard({ getToken, cadastros, onCadastroChanged, onClose, onSaved
                 <Info label="ID cliente" value={form.codigo_cliente} />
                 <Info label="Cliente" value={form.cliente} />
                 <Info label="Vendedor" value={form.vendedor} />
-                <Info label={selectedItems.length > 1 ? 'Produtos' : 'Produto'} value={form.descricao_produto} />
-                <Info label={selectedItems.length > 1 ? 'Códigos produtos' : 'Código produto'} value={form.codigo_produto} />
+                {selectedItems.length <= 1 && (
+                  <ProdutoList className="sm:col-span-2" descricaoProduto={form.descricao_produto} codigoProduto={form.codigo_produto} />
+                )}
                 <Info label="Quantidade" value={form.quantidade} />
                 <Info label="Valor total" value={money(form.valor_total)} />
               </div>
@@ -2282,6 +2289,25 @@ function Info({ label, value }: { label: string; value: string | null | undefine
   )
 }
 
+function ProdutoList({ descricaoProduto, codigoProduto, className = '' }: { descricaoProduto?: string | null; codigoProduto?: string | null; className?: string }) {
+  const produtos = parseProdutos(descricaoProduto, codigoProduto)
+    ?? [{ descricao: descricaoProduto ?? '', codigo: codigoProduto ?? '' }]
+
+  return (
+    <div className={`rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 ${className}`}>
+      <p className="text-xs text-gray-400">{produtos.length > 1 ? 'Produtos' : 'Produto'}</p>
+      <div className="mt-1 divide-y divide-gray-200">
+        {produtos.map((produto, index) => (
+          <div key={index} className="flex items-center justify-between gap-3 py-1.5 first:pt-0 last:pb-0">
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800">{produto.descricao || '-'}</span>
+            <span className="shrink-0 text-xs text-gray-400">ERP {produto.codigo || '-'}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function StatusBadge({ status }: { status: string }) {
   const tone = getStatusTone(status)
   return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tone.badge}`}>{status}</span>
@@ -2319,6 +2345,15 @@ function money(value?: string | number | null) {
 
 function round2(value: number) {
   return Math.round(value * 100) / 100
+}
+
+function parseProdutos(descricaoProduto?: string | null, codigoProduto?: string | null) {
+  const desc = (descricaoProduto ?? '').trim()
+  const match = desc.match(/^(\d+) produtos: ([\s\S]*)$/)
+  if (!match) return null
+  const descricoes = match[2].split(' | ')
+  const codigos = (codigoProduto ?? '').split(', ')
+  return descricoes.map((descricao, index) => ({ descricao, codigo: codigos[index] ?? '' }))
 }
 
 function summarizeItems(items: PcpPedidoItem[]) {

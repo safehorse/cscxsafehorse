@@ -6,6 +6,10 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
 
 const { Pool } = pg
 
+// numeric (OID 1700) vem do node-postgres como string (ex: "2.00") para nao perder precisao.
+// Convertemos para number aqui pra evitar ".00" sobrando em quantidade/valores no front.
+pg.types.setTypeParser(1700, (value) => (value === null ? null : parseFloat(value)))
+
 const PORT = Number(process.env.PORT || 3001)
 const DATABASE_URL = process.env.DATABASE_URL
 const CSCX_API_KEY = process.env.CSCX_API_KEY || ''
