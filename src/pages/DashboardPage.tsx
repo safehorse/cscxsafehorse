@@ -67,6 +67,20 @@ export type WizardForm = typeof emptyWizard
 
 type DashboardMode = 'dashboard' | 'chamados'
 
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function currentMonthRange() {
+  const now = new Date()
+  const from = new Date(now.getFullYear(), now.getMonth(), 1)
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  return { from: toDateInputValue(from), to: toDateInputValue(to) }
+}
+
 export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) {
   const { getToken } = useAuth()
   const { user } = useUser()
@@ -82,8 +96,8 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [responsavel, setResponsavel] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [dateFrom, setDateFrom] = useState(() => (isChamadosPage ? '' : currentMonthRange().from))
+  const [dateTo, setDateTo] = useState(() => (isChamadosPage ? '' : currentMonthRange().to))
   const [year, setYear] = useState('')
   const [page, setPage] = useState(1)
   const [totalAtendimentos, setTotalAtendimentos] = useState(0)
@@ -162,6 +176,14 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
     setResponsavel('')
     setDateFrom('')
     setDateTo('')
+    setYear('')
+    setPage(1)
+  }
+
+  function setCurrentMonthFilter() {
+    const { from, to } = currentMonthRange()
+    setDateFrom(from)
+    setDateTo(to)
     setYear('')
     setPage(1)
   }
@@ -377,6 +399,63 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
         <section className="min-w-0 space-y-5">
           {!isChamadosPage && (
             <>
+              <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_140px_auto_auto]">
+                  <label className="min-w-0">
+                    <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                      <CalendarDays size={13} className="text-gray-400" />
+                      Data inicial
+                    </span>
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={event => { setDateFrom(event.target.value); setPage(1) }}
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                  <label className="min-w-0">
+                    <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                      <CalendarDays size={13} className="text-gray-400" />
+                      Data final
+                    </span>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={event => { setDateTo(event.target.value); setPage(1) }}
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                  <label className="min-w-0">
+                    <span className="mb-1 block text-xs font-medium text-gray-500">Ano</span>
+                    <select
+                      value={year}
+                      onChange={event => { setYear(event.target.value); setPage(1) }}
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-600 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    >
+                      <option value="">Todos</option>
+                      {yearOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={setCurrentMonthFilter}
+                    className="mt-auto inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-100"
+                  >
+                    <CalendarDays size={15} />
+                    Mês atual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    disabled={!hasFilters}
+                    className="mt-auto inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    <X size={15} />
+                    Limpar
+                  </button>
+                </div>
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <Metric label="Atendimentos" value={dashboard?.totais.total ?? 0} loading={loading} />
                 <Metric label="Em andamento" value={dashboard?.totais.abertos ?? 0} loading={loading} tone="blue" />
