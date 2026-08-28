@@ -6,6 +6,7 @@ import { ClientesPage } from './pages/ClientesPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { KanbanPage } from './pages/KanbanPage'
 import { LoginPage } from './pages/LoginPage'
+import { RelatoriosPage } from './pages/RelatoriosPage'
 import { UsuariosPage } from './pages/UsuariosPage'
 
 export default function App() {
@@ -46,6 +47,12 @@ export default function App() {
         <Route path="/clientes" element={
           <>
             <SignedIn><ClientesPage /></SignedIn>
+            <SignedOut><Navigate to="/login" replace /></SignedOut>
+          </>
+        } />
+        <Route path="/relatorios" element={
+          <>
+            <SignedIn><RelatoriosPage /></SignedIn>
             <SignedOut><Navigate to="/login" replace /></SignedOut>
           </>
         } />
