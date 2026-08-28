@@ -55,6 +55,11 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         } ${collapsed ? 'w-64 lg:w-20' : 'w-64'}`}
       >
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+          <Link to="/" onClick={onClose} className={itemClasses(false)}>
+            <img src={logoSrc} alt="Safe Horse" className="h-7 shrink-0 object-contain" />
+            <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>CS/CX Safe Horse</span>
+          </Link>
+
           {NAV_LINKS.map(item => {
             const Icon = item.icon
             return (
@@ -73,16 +78,11 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         </nav>
 
         <div className="p-3">
-          <Link to="/" onClick={onClose} className={itemClasses(false)}>
-            <img src={logoSrc} alt="Safe Horse" className="h-7 shrink-0 object-contain" />
-            <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>CS/CX Safe Horse</span>
-          </Link>
-
           <button
             type="button"
             onClick={() => setCollapsed(prev => !prev)}
             title={collapsed ? 'Expandir menu' : 'Recolher menu'}
-            className={`mt-1 w-full ${itemClasses(false)}`}
+            className={`w-full ${itemClasses(false)}`}
           >
             {collapsed ? <PanelLeftOpen size={17} className="shrink-0" /> : <PanelLeftClose size={17} className="shrink-0" />}
             <span className={collapsed ? 'lg:hidden' : ''}>Recolher menu</span>
