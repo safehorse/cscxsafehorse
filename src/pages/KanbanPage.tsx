@@ -1,23 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useAuth, useClerk, useUser } from '@clerk/clerk-react'
-import { Link } from 'react-router-dom'
+import { useAuth, useUser } from '@clerk/clerk-react'
 import {
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   Grid3X3,
-  List,
   LoaderCircle,
-  LogOut,
-  MessageSquareText,
   Phone,
   RefreshCw,
   Search,
-  UsersRound,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import logoSrc from '../assets/logo.png'
-import { UserNameButton } from '../components/UserNameButton'
+import { Layout } from '../components/Layout'
 import { api } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
 import type { Atendimento, CadastroOptions } from '../lib/types'
@@ -39,7 +32,6 @@ const STORAGE_KEY = 'cscx-kanban-column-order'
 export function KanbanPage() {
   const { getToken } = useAuth()
   const { user } = useUser()
-  const { signOut } = useClerk()
   const [items, setItems] = useState<Atendimento[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -314,66 +306,8 @@ export function KanbanPage() {
   }, [user?.id])
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <header className="sticky top-0 z-20 border-b border-gray-200 bg-white px-4 py-3 sm:px-6">
-        <div className="mx-auto flex max-w-[1440px] items-center gap-3">
-          <Link to="/" className="flex items-center gap-3">
-            <img src={logoSrc} alt="Safe Horse" className="h-8 object-contain" />
-            <div>
-              <h1 className="text-sm font-bold text-gray-950">Kanban CS/CX</h1>
-              <p className="text-xs text-gray-400">Chamados por status</p>
-            </div>
-          </Link>
-          <div className="flex-1" />
-          <Link
-            to="/"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-          >
-            <ArrowLeft size={15} />
-            Voltar
-          </Link>
-          <Link
-            to="/chamados"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-          >
-            <List size={15} />
-            Chamados
-          </Link>
-          <Link
-            to="/?whatsapp=1"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
-          >
-            <MessageSquareText size={15} />
-            WhatsApp
-          </Link>
-          <button
-            type="button"
-            onClick={load}
-            className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
-            title="Atualizar"
-          >
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <Link
-            to="/usuarios"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
-            title="Usuários"
-          >
-            <UsersRound size={15} />
-          </Link>
-          <UserNameButton />
-          <button
-            type="button"
-            onClick={() => signOut()}
-            className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-red-500 transition-colors hover:bg-red-50"
-            title="Sair"
-          >
-            <LogOut size={15} />
-          </button>
-        </div>
-      </header>
-
-      <main className="min-h-0 flex-1 px-4 py-5 sm:px-6">
+    <Layout>
+      <div className="min-h-0 flex-1 px-4 py-5 sm:px-6">
         <div className="mx-auto flex max-w-[1440px] flex-col gap-4">
           <section className="rounded-2xl border border-gray-200 bg-white p-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -396,6 +330,14 @@ export function KanbanPage() {
                   className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm outline-none transition-colors focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
                 />
               </div>
+              <button
+                type="button"
+                onClick={load}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
+                title="Atualizar"
+              >
+                <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+              </button>
             </div>
           </section>
 
@@ -512,7 +454,7 @@ export function KanbanPage() {
             </section>
           )}
         </div>
-      </main>
+      </div>
 
       {selected && (
         <DetailDrawer
@@ -534,7 +476,7 @@ export function KanbanPage() {
           onDelete={deleteChamado}
         />
       )}
-    </div>
+    </Layout>
   )
 }
 

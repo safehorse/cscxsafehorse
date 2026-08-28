@@ -1,23 +1,16 @@
 import { useEffect, useState } from 'react'
-import { useAuth, useClerk, useUser } from '@clerk/clerk-react'
-import { Link } from 'react-router-dom'
+import { useAuth, useUser } from '@clerk/clerk-react'
 import {
-  ArrowLeft,
   CheckCircle2,
-  Grid3X3,
-  List,
   LoaderCircle,
-  LogOut,
   Mail,
-  MessageCircle,
   RefreshCw,
   ShieldCheck,
   UserPlus,
   UsersRound,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import logoSrc from '../assets/logo.png'
-import { UserNameButton } from '../components/UserNameButton'
+import { Layout } from '../components/Layout'
 import { api } from '../lib/api'
 import type { Usuario } from '../lib/types'
 
@@ -40,7 +33,6 @@ const emptyForm: UsuarioForm = {
 export function UsuariosPage() {
   const { getToken } = useAuth()
   const { user } = useUser()
-  const { signOut } = useClerk()
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -125,45 +117,14 @@ export function UsuariosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-20 border-b border-gray-200 bg-white px-4 py-3 sm:px-6">
-        <div className="mx-auto flex max-w-[1320px] items-center gap-3">
-          <Link to="/" className="flex items-center gap-3">
-            <img src={logoSrc} alt="Safe Horse" className="h-8 object-contain" />
-            <div>
-              <h1 className="text-sm font-bold text-gray-950">Usuários CS/CX</h1>
-              <p className="text-xs text-gray-400">Nomeação de admin e CS</p>
-            </div>
-          </Link>
+    <Layout>
+      <div className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6">
+        <div className="mb-5 flex items-center gap-3">
+          <div>
+            <h1 className="text-sm font-bold text-gray-950">Usuários CS/CX</h1>
+            <p className="text-xs text-gray-400">Nomeação de admin e CS</p>
+          </div>
           <div className="flex-1" />
-          <Link
-            to="/"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-          >
-            <ArrowLeft size={15} />
-            Dashboard
-          </Link>
-          <Link
-            to="/chamados"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-          >
-            <List size={15} />
-            Chamados
-          </Link>
-          <Link
-            to="/whatsapp"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
-          >
-            <MessageCircle size={15} />
-            WhatsApp
-          </Link>
-          <Link
-            to="/kanban"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100"
-          >
-            <Grid3X3 size={15} />
-            Kanban
-          </Link>
           <button
             type="button"
             onClick={() => load()}
@@ -172,19 +133,9 @@ export function UsuariosPage() {
           >
             <RefreshCw size={15} />
           </button>
-          <UserNameButton />
-          <button
-            type="button"
-            onClick={() => signOut()}
-            className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-red-500 transition-colors hover:bg-red-50"
-            title="Sair"
-          >
-            <LogOut size={15} />
-          </button>
         </div>
-      </header>
 
-      <main className="mx-auto grid max-w-[1320px] gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[380px_1fr]">
+        <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
         <section className="rounded-2xl border border-gray-200 bg-white p-4">
           <div className="mb-4 flex items-center gap-2">
             <UserPlus size={16} className="text-blue-500" />
@@ -325,8 +276,9 @@ export function UsuariosPage() {
             </div>
           )}
         </section>
-      </main>
-    </div>
+        </div>
+      </div>
+    </Layout>
   )
 }
 

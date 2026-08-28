@@ -1,26 +1,19 @@
 import { useEffect, useState } from 'react'
-import { useAuth, useClerk } from '@clerk/clerk-react'
+import { useAuth } from '@clerk/clerk-react'
 import { Link } from 'react-router-dom'
 import {
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  Grid3X3,
-  List,
   LoaderCircle,
-  LogOut,
   MessageCircle,
-  MessageSquareText,
   Package,
   Phone,
   RefreshCw,
   Search,
-  UsersRound,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import logoSrc from '../assets/logo.png'
-import { UserNameButton } from '../components/UserNameButton'
+import { Layout } from '../components/Layout'
 import { api } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
 import type { Atendimento, Cliente, PcpPedido } from '../lib/types'
@@ -30,7 +23,6 @@ const PAGE_SIZE = 30
 
 export function ClientesPage() {
   const { getToken } = useAuth()
-  const { signOut } = useClerk()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -114,65 +106,12 @@ export function ClientesPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-20 border-b border-gray-200 bg-white px-4 py-3 sm:px-6">
-        <div className="mx-auto flex max-w-[1320px] items-center gap-3">
-          <Link to="/" className="flex items-center gap-3">
-            <img src={logoSrc} alt="Safe Horse" className="h-8 object-contain" />
-            <div>
-              <h1 className="text-sm font-bold text-gray-950">Clientes</h1>
-              <p className="text-xs text-gray-400">{total} cliente{total !== 1 ? 's' : ''} cadastrado{total !== 1 ? 's' : ''}</p>
-            </div>
-          </Link>
-          <div className="flex-1" />
-          <Link
-            to="/"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-          >
-            <ArrowLeft size={15} />
-            Voltar
-          </Link>
-          <Link
-            to="/chamados"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-          >
-            <List size={15} />
-            Chamados
-          </Link>
-          <Link
-            to="/?whatsapp=1"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
-          >
-            <MessageSquareText size={15} />
-            WhatsApp
-          </Link>
-          <Link
-            to="/kanban"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100"
-          >
-            <Grid3X3 size={15} />
-            Kanban
-          </Link>
-          <Link
-            to="/usuarios"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
-            title="Usuários"
-          >
-            <UsersRound size={15} />
-          </Link>
-          <UserNameButton />
-          <button
-            type="button"
-            onClick={() => signOut()}
-            className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-red-500 transition-colors hover:bg-red-50"
-            title="Sair"
-          >
-            <LogOut size={15} />
-          </button>
+    <Layout>
+      <div className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6">
+        <div className="mb-4">
+          <h1 className="text-sm font-bold text-gray-950">Clientes</h1>
+          <p className="text-xs text-gray-400">{total} cliente{total !== 1 ? 's' : ''} cadastrado{total !== 1 ? 's' : ''}</p>
         </div>
-      </header>
-
-      <main className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6">
         <section className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4">
           <div className="relative min-w-[240px] flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -258,7 +197,7 @@ export function ClientesPage() {
             </button>
           </div>
         )}
-      </main>
+      </div>
 
       {selectedCliente && (
         <div
@@ -395,7 +334,7 @@ export function ClientesPage() {
           </div>
         </div>
       )}
-    </div>
+    </Layout>
   )
 }
 

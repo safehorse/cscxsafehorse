@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useAuth, useClerk, useUser } from '@clerk/clerk-react'
+import { useAuth, useUser } from '@clerk/clerk-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -12,10 +12,8 @@ import {
   ChevronRight,
   Clock3,
   Flag,
-  Grid3X3,
   LoaderCircle,
   List,
-  LogOut,
   MessageSquareText,
   PackageSearch,
   Pencil,
@@ -24,13 +22,11 @@ import {
   Search,
   Trash2,
   UserPlus,
-  UsersRound,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import logoSrc from '../assets/logo.png'
 import { DateTimePicker } from '../components/DateTimePicker'
-import { UserNameButton } from '../components/UserNameButton'
+import { Layout } from '../components/Layout'
 import { WhatsappConnectModal } from '../components/WhatsappConnectModal'
 import { api, type AtendimentoFilters } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
@@ -84,7 +80,6 @@ function currentMonthRange() {
 export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) {
   const { getToken } = useAuth()
   const { user } = useUser()
-  const { signOut } = useClerk()
   const [searchParams, setSearchParams] = useSearchParams()
   const isChamadosPage = mode === 'chamados'
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
@@ -322,80 +317,21 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
   }, [dashboard])
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-20 border-b border-gray-200 bg-white px-4 py-3 sm:px-6">
-        <div className="mx-auto flex max-w-[1320px] items-center gap-3">
-          <Link to="/" className="flex items-center gap-3">
-            <img src={logoSrc} alt="Safe Horse" className="h-8 object-contain" />
-            <div>
-              <h1 className="text-sm font-bold text-gray-950">CS/CX Safe Horse</h1>
-              <p className="text-xs text-gray-400">Sucesso do Cliente 2026</p>
-            </div>
-          </Link>
-          <div className="flex-1" />
-          {isChamadosPage && (
-            <Link
-              to="/"
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-              title="Voltar ao dashboard"
-            >
-              <ArrowLeft size={15} />
-              Voltar
-            </Link>
-          )}
+    <Layout>
+      {isChamadosPage && (
+        <div className="border-b border-gray-100 bg-white px-4 py-3 sm:px-6">
           <Link
-            to="/chamados"
-            className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors ${isChamadosPage ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-            title="Chamados"
-          >
-            <List size={15} />
-            Chamados
-          </Link>
-          <Link
-            to="/clientes"
+            to="/"
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-            title="Clientes"
+            title="Voltar ao dashboard"
           >
-            <UsersRound size={15} />
-            Clientes
+            <ArrowLeft size={15} />
+            Voltar
           </Link>
-          <button
-            type="button"
-            onClick={() => setShowWhatsapp(true)}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
-            title="WhatsApp"
-          >
-            <MessageSquareText size={15} />
-            WhatsApp
-          </button>
-          <Link
-            to="/kanban"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100"
-            title="Kanban"
-          >
-            <Grid3X3 size={15} />
-            Kanban
-          </Link>
-          <Link
-            to="/usuarios"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
-            title="Usuários"
-          >
-            <UsersRound size={15} />
-          </Link>
-          <UserNameButton />
-          <button
-            type="button"
-            onClick={() => signOut()}
-            className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-red-500 transition-colors hover:bg-red-50"
-            title="Sair"
-          >
-            <LogOut size={15} />
-          </button>
         </div>
-      </header>
+      )}
 
-      <main className={`mx-auto grid max-w-[1320px] gap-5 px-4 py-6 sm:px-6 ${isChamadosPage ? '' : 'lg:grid-cols-[1fr_340px]'}`}>
+      <div className={`mx-auto grid max-w-[1320px] gap-5 px-4 py-6 sm:px-6 ${isChamadosPage ? '' : 'lg:grid-cols-[1fr_340px]'}`}>
         <section className="min-w-0 space-y-5">
           {!isChamadosPage && (
             <>
@@ -678,7 +614,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
           </div>
         </aside>
         )}
-      </main>
+      </div>
 
       {selected && (
         <DetailDrawer
@@ -718,7 +654,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
       )}
 
       {showWhatsapp && <WhatsappConnectModal onClose={() => setShowWhatsapp(false)} />}
-    </div>
+    </Layout>
   )
 }
 
@@ -2075,7 +2011,7 @@ export function PedidoResumo({ pedido, compact = false, hideItems = false }: { p
   )
 }
 
-function Metric({ label, value, loading, tone = 'gray' }: { label: string; value: string | number; loading: boolean; tone?: 'gray' | 'blue' | 'amber' | 'emerald' }) {
+export function Metric({ label, value, loading, tone = 'gray' }: { label: string; value: string | number; loading: boolean; tone?: 'gray' | 'blue' | 'amber' | 'emerald' }) {
   const classes = {
     gray: 'bg-gray-100 text-gray-700',
     blue: 'bg-blue-50 text-blue-700',
@@ -2094,7 +2030,7 @@ function Metric({ label, value, loading, tone = 'gray' }: { label: string; value
   )
 }
 
-function AtendimentosPorDataChart({ rows, loading }: { rows: DashboardData['por_data']; loading: boolean }) {
+export function AtendimentosPorDataChart({ rows, loading }: { rows: DashboardData['por_data']; loading: boolean }) {
   const max = Math.max(1, ...rows.flatMap(row => [row.total, row.solucionados]))
   const total = rows.reduce((sum, row) => sum + row.total, 0)
 
@@ -2156,7 +2092,7 @@ function AtendimentosPorDataChart({ rows, loading }: { rows: DashboardData['por_
   )
 }
 
-function StatusChart({ rows, loading }: { rows: DashboardData['status']; loading: boolean }) {
+export function StatusChart({ rows, loading }: { rows: DashboardData['status']; loading: boolean }) {
   const max = Math.max(1, ...rows.map(row => row.total))
 
   if (loading) {

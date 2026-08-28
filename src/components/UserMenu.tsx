@@ -1,23 +1,34 @@
-import { useEffect, useState } from 'react'
-import { useAuth, useUser } from '@clerk/clerk-react'
-import { Check, Pencil, User, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { useAuth, useClerk, useUser } from '@clerk/clerk-react'
+import { Check, ChevronDown, LogOut, Pencil, User, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '../lib/api'
 
-export function UserNameButton({ tone = 'light' }: { tone?: 'light' | 'dark' }) {
+export function UserMenu() {
   const { getToken } = useAuth()
   const { user } = useUser()
+  const { signOut } = useClerk()
   const [editing, setEditing] = useState(false)
+  const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const displayName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'Usuário'
   const email = user?.primaryEmailAddress?.emailAddress || null
-  const isDark = tone === 'dark'
 
   useEffect(() => {
     if (!editing) setName(user?.fullName || '')
   }, [editing, user?.fullName])
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
 
   async function save() {
     const nextName = name.trim()
@@ -39,7 +50,7 @@ export function UserNameButton({ tone = 'light' }: { tone?: 'light' | 'dark' }) 
 
   if (editing) {
     return (
-      <div className={`hidden items-center gap-1.5 rounded-xl border px-2 py-1.5 text-sm sm:flex ${isDark ? 'border-white/10 bg-white/10 text-gray-100' : 'border-blue-200 bg-blue-50 text-gray-700'}`}>
+      <div className="flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-2 py-1.5 text-sm">
         <User size={15} className="text-blue-500" />
         <input
           value={name}
@@ -73,15 +84,36 @@ export function UserNameButton({ tone = 'light' }: { tone?: 'light' | 'dark' }) 
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => setEditing(true)}
-      className={`hidden items-center gap-2 rounded-xl border px-3 py-1.5 text-sm transition-colors sm:flex ${isDark ? 'border-white/10 text-gray-300 hover:bg-white/10' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-      title="Alterar meu nome"
-    >
-      <User size={15} className="text-gray-400" />
-      <span className="max-w-48 truncate">{displayName}</span>
-      <Pencil size={13} className="text-gray-400" />
-    </button>
+    <div className="relative" ref={menuRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(prev => !prev)}
+        className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-50"
+      >
+        <User size={15} className="text-gray-400" />
+        <span className="max-w-48 truncate">{displayName}</span>
+        <ChevronDown size={14} className={`text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-30 mt-2 w-48 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+          <button
+            type="button"
+            onClick={() => { setOpen(false); setEditing(true) }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-50"
+          >
+            <Pencil size={14} className="text-gray-400" />
+            Editar nome
+          </button>
+          <button
+            type="button"
+            onClick={() => signOut()}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+          >
+            <LogOut size={14} />
+            Sair
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
