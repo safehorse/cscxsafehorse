@@ -39,9 +39,9 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   }
 
   function itemClasses(active: boolean) {
-    return `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
-      active ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
-    } ${collapsed ? 'lg:justify-center' : ''}`
+    return `flex h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm transition-colors ${
+      active ? 'bg-blue-50 font-bold text-blue-700' : 'font-medium text-gray-500'
+    } ${collapsed ? 'lg:justify-start lg:pl-3.5' : ''}`
   }
 
   return (
@@ -50,15 +50,24 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         <div className="fixed inset-0 z-30 bg-gray-950/30 lg:hidden" onClick={onClose} />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex shrink-0 flex-col border-r border-gray-200 bg-white transition-all duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex shrink-0 flex-col border-r border-gray-200 bg-white px-3 py-4 transition-all duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
-        } ${collapsed ? 'w-64 lg:w-20' : 'w-64'}`}
+        } ${collapsed ? 'w-64 lg:w-[76px]' : 'w-64 lg:w-[224px]'}`}
       >
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          <Link to="/" onClick={onClose} className={itemClasses(false)}>
-            <img src={logoSrc} alt="Safe Horse" className="h-7 shrink-0 object-contain" />
-          </Link>
+        <Link to="/" onClick={onClose} className="mb-4 flex h-[42px] shrink-0 items-center overflow-hidden px-2">
+          <img
+            src={logoSrc}
+            alt="Safe Horse"
+            className={`h-[34px] w-[126px] shrink-0 object-contain object-left ${collapsed ? 'lg:hidden' : ''}`}
+          />
+          <img
+            src="/favicon.png"
+            alt="Safe Horse"
+            className={`hidden h-[34px] w-[34px] shrink-0 object-contain ${collapsed ? 'lg:block' : ''}`}
+          />
+        </Link>
 
+        <nav className="flex flex-col gap-1 overflow-y-auto">
           {NAV_LINKS.map(item => {
             const Icon = item.icon
             return (
@@ -69,24 +78,22 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                 title={collapsed ? item.label : undefined}
                 className={itemClasses(isActive(item.to))}
               >
-                <Icon size={17} className="shrink-0" />
-                <span className={collapsed ? 'lg:hidden' : ''}>{item.label}</span>
+                <Icon size={18} className="shrink-0" />
+                <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{item.label}</span>
               </Link>
             )
           })}
         </nav>
 
-        <div className="p-3">
-          <button
-            type="button"
-            onClick={() => setCollapsed(prev => !prev)}
-            title={collapsed ? 'Expandir menu' : 'Recolher menu'}
-            className={`w-full ${itemClasses(false)}`}
-          >
-            {collapsed ? <PanelLeftOpen size={17} className="shrink-0" /> : <PanelLeftClose size={17} className="shrink-0" />}
-            <span className={collapsed ? 'lg:hidden' : ''}>Recolher menu</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed(prev => !prev)}
+          title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+          className={`mt-auto border border-gray-200 bg-white ${itemClasses(false)}`}
+        >
+          {collapsed ? <PanelLeftOpen size={18} className="shrink-0" /> : <PanelLeftClose size={18} className="shrink-0" />}
+          <span className={collapsed ? 'lg:hidden' : ''}>{collapsed ? 'Expandir' : 'Recolher'}</span>
+        </button>
       </aside>
     </>
   )
