@@ -57,7 +57,6 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           <Link to="/" onClick={onClose} className={itemClasses(false)}>
             <img src={logoSrc} alt="Safe Horse" className="h-7 shrink-0 object-contain" />
-            <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>CS/CX Safe Horse</span>
           </Link>
 
           {NAV_LINKS.map(item => {
@@ -78,6 +77,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         </nav>
 
         <div className="p-3">
+          <p className={`mb-1 truncate px-3 text-sm font-bold text-gray-950 ${collapsed ? 'lg:hidden' : ''}`}>CS/CX Safe Horse</p>
           <button
             type="button"
             onClick={() => setCollapsed(prev => !prev)}
