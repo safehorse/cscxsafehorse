@@ -2011,7 +2011,7 @@ export function PedidoResumo({ pedido, compact = false, hideItems = false }: { p
   )
 }
 
-export function Metric({ label, value, loading, tone = 'gray' }: { label: string; value: string | number; loading: boolean; tone?: 'gray' | 'blue' | 'amber' | 'emerald' }) {
+function Metric({ label, value, loading, tone = 'gray' }: { label: string; value: string | number; loading: boolean; tone?: 'gray' | 'blue' | 'amber' | 'emerald' }) {
   const classes = {
     gray: 'bg-gray-100 text-gray-700',
     blue: 'bg-blue-50 text-blue-700',
@@ -2030,7 +2030,7 @@ export function Metric({ label, value, loading, tone = 'gray' }: { label: string
   )
 }
 
-export function AtendimentosPorDataChart({ rows, loading }: { rows: DashboardData['por_data']; loading: boolean }) {
+function AtendimentosPorDataChart({ rows, loading }: { rows: DashboardData['por_data']; loading: boolean }) {
   const max = Math.max(1, ...rows.flatMap(row => [row.total, row.solucionados]))
   const total = rows.reduce((sum, row) => sum + row.total, 0)
 
@@ -2092,7 +2092,7 @@ export function AtendimentosPorDataChart({ rows, loading }: { rows: DashboardDat
   )
 }
 
-export function StatusChart({ rows, loading }: { rows: DashboardData['status']; loading: boolean }) {
+function StatusChart({ rows, loading }: { rows: DashboardData['status']; loading: boolean }) {
   const max = Math.max(1, ...rows.map(row => row.total))
 
   if (loading) {
