@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { Menu } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Menu, MessageSquareText } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { UserMenu } from './UserMenu'
 
@@ -21,6 +22,14 @@ export function Layout({ children }: { children: ReactNode }) {
               <Menu size={17} />
             </button>
             <div className="flex-1" />
+            <Link
+              to="/?whatsapp=1"
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+              title="WhatsApp"
+            >
+              <MessageSquareText size={15} />
+              WhatsApp
+            </Link>
             <UserMenu />
           </div>
         </header>

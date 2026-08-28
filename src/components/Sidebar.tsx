@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { BarChart3, CalendarDays, Grid3X3, LayoutDashboard, List, MessageSquareText, PanelLeftClose, PanelLeftOpen, UsersRound } from 'lucide-react'
+import { BarChart3, CalendarDays, Grid3X3, LayoutDashboard, List, PanelLeftClose, PanelLeftOpen, UsersRound } from 'lucide-react'
 import logoSrc from '../assets/logo.png'
 
 const NAV_LINKS = [
@@ -11,7 +11,6 @@ const NAV_LINKS = [
   { to: '/kanban', label: 'Kanban', icon: Grid3X3 },
   { to: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   { to: '/usuarios', label: 'Usuários', icon: UsersRound },
-  { to: '/?whatsapp=1', label: 'WhatsApp', icon: MessageSquareText },
 ]
 
 const STORAGE_KEY = 'cscx-sidebar-collapsed'
@@ -39,6 +38,12 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
     return path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
   }
 
+  function itemClasses(active: boolean) {
+    return `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
+      active ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
+    } ${collapsed ? 'lg:justify-center' : ''}`
+  }
+
   return (
     <>
       {open && (
@@ -49,24 +54,31 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           open ? 'translate-x-0' : '-translate-x-full'
         } ${collapsed ? 'w-64 lg:w-20' : 'w-64'}`}
       >
-        <Link to="/" onClick={onClose} className={`flex items-center gap-3 border-b border-gray-100 px-5 py-4 ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}>
-          <img src={logoSrc} alt="Safe Horse" className="h-8 shrink-0 object-contain" />
-          <span className={`truncate text-sm font-bold text-gray-950 ${collapsed ? 'lg:hidden' : ''}`}>CS/CX Safe Horse</span>
-        </Link>
-
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+          <Link to="/" onClick={onClose} className={itemClasses(false)}>
+            <img src={logoSrc} alt="Safe Horse" className="h-7 shrink-0 object-contain" />
+            <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>CS/CX Safe Horse</span>
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => setCollapsed(prev => !prev)}
+            title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+            className={`w-full ${itemClasses(false)}`}
+          >
+            {collapsed ? <PanelLeftOpen size={17} className="shrink-0" /> : <PanelLeftClose size={17} className="shrink-0" />}
+            <span className={collapsed ? 'lg:hidden' : ''}>Recolher menu</span>
+          </button>
+
           {NAV_LINKS.map(item => {
             const Icon = item.icon
-            const active = isActive(item.to)
             return (
               <Link
                 key={item.label}
                 to={item.to}
                 onClick={onClose}
                 title={collapsed ? item.label : undefined}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
-                  active ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
-                } ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
+                className={itemClasses(isActive(item.to))}
               >
                 <Icon size={17} className="shrink-0" />
                 <span className={collapsed ? 'lg:hidden' : ''}>{item.label}</span>
@@ -74,17 +86,6 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             )
           })}
         </nav>
-
-        <div className={`mt-auto flex items-center border-t border-gray-100 p-3 ${collapsed ? 'lg:justify-center' : 'justify-end'}`}>
-          <button
-            type="button"
-            onClick={() => setCollapsed(prev => !prev)}
-            className="hidden h-9 w-9 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600 lg:grid"
-            title={collapsed ? 'Expandir menu' : 'Recolher menu'}
-          >
-            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-          </button>
-        </div>
       </aside>
     </>
   )

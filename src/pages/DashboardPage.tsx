@@ -318,19 +318,6 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
 
   return (
     <Layout>
-      {isChamadosPage && (
-        <div className="border-b border-gray-100 bg-white px-4 py-3 sm:px-6">
-          <Link
-            to="/"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-            title="Voltar ao dashboard"
-          >
-            <ArrowLeft size={15} />
-            Voltar
-          </Link>
-        </div>
-      )}
-
       <div className={`mx-auto grid max-w-[1320px] gap-5 px-4 py-6 sm:px-6 ${isChamadosPage ? '' : 'lg:grid-cols-[1fr_340px]'}`}>
         <section className="min-w-0 space-y-5">
           {!isChamadosPage && (
