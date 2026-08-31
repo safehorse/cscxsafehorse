@@ -8,7 +8,6 @@ import {
   MessageCircle,
   Package,
   Phone,
-  RefreshCw,
   Search,
   X,
 } from 'lucide-react'
@@ -28,7 +27,6 @@ export function ClientesPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null)
   const [detailChamados, setDetailChamados] = useState<Atendimento[]>([])
   const [detailPedidos, setDetailPedidos] = useState<PcpPedido[]>([])
@@ -78,19 +76,6 @@ export function ClientesPage() {
     }
   }
 
-  async function sincronizar() {
-    setSyncing(true)
-    try {
-      const { data } = await api.sincronizarClientes(getToken)
-      toast.success(`${data.total} clientes sincronizados do PCP.`)
-      load()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Falha ao sincronizar.')
-    } finally {
-      setSyncing(false)
-    }
-  }
-
   useEffect(() => {
     load()
   }, [page])
@@ -122,16 +107,6 @@ export function ClientesPage() {
               className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm outline-none transition-colors focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
             />
           </div>
-          <button
-            type="button"
-            onClick={sincronizar}
-            disabled={syncing}
-            title="Traz clientes novos do PCP (código e nome). Não sobrescreve dados já preenchidos."
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-60"
-          >
-            <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
-            Sincronizar do ERP
-          </button>
         </section>
 
         <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
@@ -213,6 +188,7 @@ export function ClientesPage() {
                 <h2 className="text-lg font-bold text-gray-950">{selectedCliente.nome ?? 'Cliente sem nome'}</h2>
                 <p className="text-xs text-gray-400">
                   Código {selectedCliente.codigo_cliente}
+                  {selectedCliente.razao ? ` · ${selectedCliente.razao}` : ''}
                   {selectedCliente.cpf_cnpj ? ` · CPF/CNPJ ${selectedCliente.cpf_cnpj}` : ''}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-gray-600">

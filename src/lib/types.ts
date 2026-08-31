@@ -106,6 +106,7 @@ export interface ProdutoSugestao {
 export interface Cliente {
   codigo_cliente: string
   nome: string | null
+  razao: string | null
   telefone: string | null
   chamados: number
   endereco: string | null

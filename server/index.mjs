@@ -1044,40 +1044,106 @@ app.post('/api/clientes/sync', asyncRoute(async (_req, res) => {
   res.json({ data: result })
 }))
 
+const CLIENTES_SELECT = 'codigo,nome,razao,cidade,uf,cod_representante,telefone1,telefone2,telefone3,email1,email2,endereco,numero,bairro,cep,contato,cpf_cnpj'
+const CLIENTES_EXTRA_FIELDS = ['telefone1', 'telefone2', 'telefone3', 'email1', 'email2', 'endereco', 'numero', 'bairro', 'cep', 'contato', 'cpf_cnpj']
+
 app.get('/api/clientes', asyncRoute(async (req, res) => {
-  const search = String(req.query.search || '').trim()
+  if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
+  const search = sanitizePostgrestTerm(req.query.search)
   const requestedPage = Number(req.query.page || 1)
   const requestedPageSize = Number(req.query.pageSize || 30)
   const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1
   const pageSize = Number.isFinite(requestedPageSize) ? Math.min(Math.max(requestedPageSize, 5), 100) : 30
   const offset = (page - 1) * pageSize
 
-  const values = []
-  let whereSql = ''
+  const params = new URLSearchParams({
+    select: CLIENTES_SELECT,
+    order: 'nome.asc.nullslast',
+    limit: String(pageSize),
+    offset: String(offset),
+  })
   if (search) {
-    values.push(`%${search}%`)
-    whereSql = `where c.codigo_cliente ilike $1 or c.nome ilike $1 or c.telefone ilike $1`
+    params.set('or', `(nome.ilike.*${search}*,razao.ilike.*${search}*,codigo.ilike.*${search}*,telefone1.ilike.*${search}*,telefone2.ilike.*${search}*,telefone3.ilike.*${search}*)`)
   }
 
-  const countValues = [...values]
-  values.push(pageSize)
-  values.push(offset)
+  const response = await fetch(`${PCP_API_URL}/rest/v1/clientes?${params.toString()}`, {
+    headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}`, Prefer: 'count=exact' },
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) return res.status(response.status).json({ error: data?.message || 'Falha ao consultar clientes no PCP.' })
+  const rows = Array.isArray(data) ? data : []
 
-  const [list, total] = await Promise.all([
-    pool.query(`
-      select c.codigo_cliente, c.nome, c.telefone,
-        c.endereco, c.numero, c.bairro, c.cidade, c.uf, c.cep,
-        c.telefone1, c.telefone2, c.telefone3, c.email1, c.email2, c.contato, c.cpf_cnpj, c.vendedor,
-        (select count(*)::int from cscx_atendimentos a where a.codigo_cliente = c.codigo_cliente) as chamados
-      from cscx_clientes c
-      ${whereSql}
-      order by c.nome asc nulls last
-      limit $${values.length - 1}
-      offset $${values.length}
-    `, values),
-    pool.query(`select count(*)::int as total from cscx_clientes c ${whereSql}`, countValues),
+  const contentRange = response.headers.get('content-range') || ''
+  const total = Number(contentRange.split('/')[1]) || rows.length
+
+  const codigos = rows.map(row => String(row.codigo))
+  const representantes = [...new Set(rows.map(row => row.cod_representante).filter(Boolean))]
+
+  const [chamadosResult, vendedores] = await Promise.all([
+    codigos.length
+      ? pool.query('select codigo_cliente, count(*)::int as chamados from cscx_atendimentos where codigo_cliente = any($1) group by codigo_cliente', [codigos])
+      : Promise.resolve({ rows: [] }),
+    representantes.length
+      ? fetch(`${PCP_API_URL}/rest/v1/vendedores?select=codigo,nome&codigo=in.(${representantes.join(',')})`, {
+          headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
+        }).then(r => r.json()).catch(() => [])
+      : Promise.resolve([]),
   ])
-  res.json({ data: list.rows, total: total.rows[0]?.total ?? 0, page, pageSize })
+  const chamadosPorCodigo = new Map(chamadosResult.rows.map(row => [row.codigo_cliente, row.chamados]))
+  const vendedorPorCodigo = new Map((Array.isArray(vendedores) ? vendedores : []).map(v => [v.codigo, v.nome]))
+
+  res.json({
+    data: rows.map(row => ({
+      codigo_cliente: String(row.codigo),
+      nome: row.nome ?? null,
+      razao: row.razao ?? null,
+      telefone: row.telefone1 ?? null,
+      chamados: chamadosPorCodigo.get(String(row.codigo)) ?? 0,
+      endereco: row.endereco ?? null,
+      numero: row.numero ?? null,
+      bairro: row.bairro ?? null,
+      cidade: row.cidade ?? null,
+      uf: row.uf ?? null,
+      cep: row.cep ?? null,
+      telefone1: row.telefone1 ?? null,
+      telefone2: row.telefone2 ?? null,
+      telefone3: row.telefone3 ?? null,
+      email1: row.email1 ?? null,
+      email2: row.email2 ?? null,
+      contato: row.contato ?? null,
+      cpf_cnpj: row.cpf_cnpj ?? null,
+      vendedor: row.cod_representante ? vendedorPorCodigo.get(row.cod_representante) ?? null : null,
+    })),
+    total,
+    page,
+    pageSize,
+  })
+}))
+
+app.patch('/api/clientes/:codigo', asyncRoute(async (req, res) => {
+  if (!PCP_API_URL || !PCP_API_KEY) return res.status(500).json({ error: 'Integração PCP não configurada.' })
+  const body = {}
+  for (const field of CLIENTES_EXTRA_FIELDS) {
+    if (field in req.body) body[field] = stringOrNull(req.body[field])
+  }
+  if (!Object.keys(body).length) return res.status(400).json({ error: 'Nenhum campo para atualizar.' })
+
+  const codigo = encodeURIComponent(req.params.codigo)
+  const response = await fetch(`${PCP_API_URL}/rest/v1/clientes?codigo=eq.${codigo}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: PCP_API_KEY,
+      Authorization: `Bearer ${PCP_API_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify(body),
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) return res.status(response.status).json({ error: data?.message || 'Falha ao atualizar cliente no PCP.' })
+  const updated = Array.isArray(data) ? data[0] : data
+  if (!updated) return res.status(404).json({ error: 'Cliente não encontrado.' })
+  res.json({ data: updated })
 }))
 
 app.get('/api/clientes/:codigo/chamados', asyncRoute(async (req, res) => {

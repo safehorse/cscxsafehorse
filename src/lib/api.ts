@@ -135,9 +135,6 @@ export const api = {
     return request<{ data: Cliente[]; total: number; page: number; pageSize: number }>(`/api/clientes?${qs.toString()}`, getToken)
   },
 
-  sincronizarClientes: (getToken: () => Promise<string | null>) =>
-    request<{ data: { total: number } }>('/api/clientes/sync', getToken, { method: 'POST' }),
-
   clienteChamados: (getToken: () => Promise<string | null>, codigo: string) =>
     request<{ data: Atendimento[] }>(`/api/clientes/${encodeURIComponent(codigo)}/chamados`, getToken),
 
