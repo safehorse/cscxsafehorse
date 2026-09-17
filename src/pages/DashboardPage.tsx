@@ -820,6 +820,9 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
     }
   }
 
+  const itensDetalhados = getItensDetalhados(selected)
+  const multiplosProdutos = (itensDetalhados?.length ?? 0) > 1
+
   return (
     <div className={`${closing ? 'drawer-backdrop-out' : 'drawer-backdrop-in'} fixed inset-0 z-30 bg-gray-950/30 p-4 backdrop-blur-sm`} onMouseDown={requestClose}>
       <div className={`${closing ? 'drawer-panel-out' : 'drawer-panel-in'} ml-auto h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl`} onMouseDown={event => event.stopPropagation()}>
@@ -972,9 +975,16 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                     className="sm:col-span-2"
                     descricaoProduto={selected.descricao_produto}
                     codigoProduto={selected.codigo_produto}
+                    itens={itensDetalhados}
                   />
-                  <Info label="Quantidade" value={selected.quantidade?.toString()} />
-                  <Info label="Valor unitario" value={money(selected.valor_unitario)} />
+                  {!multiplosProdutos && <Info label="Quantidade" value={selected.quantidade?.toString()} />}
+                  {!multiplosProdutos && <Info label="Valor unitario" value={money(selected.valor_unitario)} />}
+                  {multiplosProdutos && (
+                    <Info
+                      label="Quantidade total"
+                      value={itensDetalhados!.reduce((total, item) => total + (item.quantidade ?? 0), 0).toString()}
+                    />
+                  )}
                   <Info label="Valor total" value={money(selected.valor_total)} />
                   <Info label="Valor crédito" value={money(selected.reembolso_valor)} />
                   <Info label="Setor" value={selected.setor} />
@@ -2316,9 +2326,11 @@ function Info({ label, value }: { label: string; value: string | null | undefine
   )
 }
 
-function ProdutoList({ descricaoProduto, codigoProduto, className = '', onRemove }: { descricaoProduto?: string | null; codigoProduto?: string | null; className?: string; onRemove?: (index: number) => void }) {
-  const produtos = parseProdutos(descricaoProduto, codigoProduto)
-    ?? [{ descricao: descricaoProduto ?? '', codigo: codigoProduto ?? '' }]
+function ProdutoList({ descricaoProduto, codigoProduto, itens, className = '', onRemove }: { descricaoProduto?: string | null; codigoProduto?: string | null; itens?: ProdutoDetalhado[] | null; className?: string; onRemove?: (index: number) => void }) {
+  const produtos: ProdutoDetalhado[] = itens && itens.length
+    ? itens
+    : (parseProdutos(descricaoProduto, codigoProduto) ?? [{ descricao: descricaoProduto ?? '', codigo: codigoProduto ?? '' }])
+        .map(produto => ({ descricao: produto.descricao, codigo: produto.codigo, quantidade: null, valorUnitario: null, valorTotal: null }))
   const canRemove = Boolean(onRemove) && produtos.length > 1
 
   return (
@@ -2329,6 +2341,11 @@ function ProdutoList({ descricaoProduto, codigoProduto, className = '', onRemove
           <div key={index} className="flex items-center justify-between gap-3 py-1.5 first:pt-0 last:pb-0">
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800">{produto.descricao || '-'}</span>
             <span className="shrink-0 text-xs text-gray-400">ERP {produto.codigo || '-'}</span>
+            {produto.quantidade != null && (
+              <span className="shrink-0 text-xs font-semibold text-gray-600">
+                Qtd {produto.quantidade}{produto.valorUnitario != null ? ` · ${money(produto.valorUnitario)} un.` : ''}
+              </span>
+            )}
             {canRemove && (
               <button
                 type="button"
@@ -2396,6 +2413,30 @@ function parseProdutos(descricaoProduto?: string | null, codigoProduto?: string 
   const descricoes = match[2].split(' | ')
   const codigos = (codigoProduto ?? '').split(', ')
   return descricoes.map((descricao, index) => ({ descricao, codigo: codigos[index] ?? '' }))
+}
+
+interface ProdutoDetalhado {
+  descricao: string
+  codigo: string
+  quantidade: number | null
+  valorUnitario: number | null
+  valorTotal: number | null
+}
+
+// Cada item selecionado no wizard é salvo em pcp_payload.itens no momento da criação do chamado,
+// com a quantidade/valor real daquele produto — evita depender do valor_unitario agregado
+// (que para múltiplos produtos é uma média fabricada, não o preço de nenhum item real).
+function getItensDetalhados(atendimento: Atendimento): ProdutoDetalhado[] | null {
+  const payload = atendimento.pcp_payload as { itens?: unknown } | null | undefined
+  const itens = payload && Array.isArray(payload.itens) ? payload.itens : null
+  if (!itens || !itens.length) return null
+  return itens.map((item: any) => ({
+    descricao: item?.descricao_produto ?? '',
+    codigo: item?.codigo_produto ?? '',
+    quantidade: item?.quantidade != null && Number.isFinite(Number(item.quantidade)) ? Number(item.quantidade) : null,
+    valorUnitario: item?.valor_unitario != null && Number.isFinite(Number(item.valor_unitario)) ? Number(item.valor_unitario) : null,
+    valorTotal: item?.valor_total != null && Number.isFinite(Number(item.valor_total)) ? Number(item.valor_total) : null,
+  }))
 }
 
 function removeProduto(descricaoProduto: string | null | undefined, codigoProduto: string | null | undefined, indexToRemove: number) {
