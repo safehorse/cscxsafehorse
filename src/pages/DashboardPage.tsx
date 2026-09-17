@@ -677,6 +677,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   const [syncingPedido, setSyncingPedido] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState<WizardForm>(() => atendimentoToForm(selected))
+  const [editItens, setEditItens] = useState<ProdutoDetalhado[] | null>(() => getItensDetalhados(selected))
   const [savingEdit, setSavingEdit] = useState(false)
   const [showReabrir, setShowReabrir] = useState(false)
   const [reabrirMotivo, setReabrirMotivo] = useState('')
@@ -695,6 +696,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
     setPedido(null)
     setEditing(false)
     setEditForm(atendimentoToForm(selected))
+    setEditItens(getItensDetalhados(selected))
     setShowReabrir(false)
     setReabrirMotivo('')
     setReabrirProdutoId('')
@@ -904,10 +906,25 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                     className="sm:col-span-2"
                     descricaoProduto={editForm.descricao_produto}
                     codigoProduto={editForm.codigo_produto}
+                    itens={editItens}
                     onRemove={index => {
                       const result = removeProduto(editForm.descricao_produto, editForm.codigo_produto, index)
                       if (!result) return
-                      setEditForm(prev => ({ ...prev, ...result }))
+                      const remaining = editItens ? editItens.filter((_, i) => i !== index) : null
+                      setEditItens(remaining)
+                      setEditForm(prev => {
+                        const next = { ...prev, ...result }
+                        if (remaining && remaining.length) {
+                          const quantidadeTotal = remaining.reduce((total, item) => total + (item.quantidade ?? 0), 0)
+                          const valorTotal = remaining.reduce((total, item) => total + (item.valorTotal ?? 0), 0)
+                          next.quantidade = String(quantidadeTotal)
+                          next.valor_total = String(round2(valorTotal))
+                          next.valor_unitario = remaining.length === 1 && remaining[0].valorUnitario != null
+                            ? String(remaining[0].valorUnitario)
+                            : ''
+                        }
+                        return next
+                      })
                     }}
                   />
                   <Field label="Quantidade" value={editForm.quantidade} onChange={value => updateEdit('quantidade', value)} />
