@@ -942,6 +942,20 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                         return next
                       })
                     }}
+                    onQuantidadeChange={editItens ? (index, quantidade) => {
+                      const next = editItens.map((item, i) => i === index
+                        ? { ...item, quantidade, valorTotal: item.valorUnitario != null ? round2(item.valorUnitario * quantidade) : item.valorTotal }
+                        : item)
+                      setEditItens(next)
+                      const quantidadeTotal = next.reduce((total, item) => total + (item.quantidade ?? 0), 0)
+                      const valorTotal = next.reduce((total, item) => total + (item.valorTotal ?? 0), 0)
+                      setEditForm(prev => ({
+                        ...prev,
+                        quantidade: String(quantidadeTotal),
+                        valor_total: String(round2(valorTotal)),
+                        valor_unitario: next.length === 1 && next[0].valorUnitario != null ? String(next[0].valorUnitario) : '',
+                      }))
+                    } : undefined}
                   />
                   <Field label="Quantidade" value={editForm.quantidade} onChange={value => updateEdit('quantidade', value)} />
                   <MoneyField label="Valor unitário" value={editForm.valor_unitario} onChange={value => updateEdit('valor_unitario', value)} />
@@ -2359,7 +2373,7 @@ function Info({ label, value }: { label: string; value: string | null | undefine
   )
 }
 
-function ProdutoList({ descricaoProduto, codigoProduto, itens, className = '', onRemove }: { descricaoProduto?: string | null; codigoProduto?: string | null; itens?: ProdutoDetalhado[] | null; className?: string; onRemove?: (index: number) => void }) {
+function ProdutoList({ descricaoProduto, codigoProduto, itens, className = '', onRemove, onQuantidadeChange }: { descricaoProduto?: string | null; codigoProduto?: string | null; itens?: ProdutoDetalhado[] | null; className?: string; onRemove?: (index: number) => void; onQuantidadeChange?: (index: number, quantidade: number) => void }) {
   const produtos: ProdutoDetalhado[] = itens && itens.length
     ? itens
     : (parseProdutos(descricaoProduto, codigoProduto) ?? [{ descricao: descricaoProduto ?? '', codigo: codigoProduto ?? '' }])
@@ -2374,7 +2388,22 @@ function ProdutoList({ descricaoProduto, codigoProduto, itens, className = '', o
           <div key={index} className="flex items-center justify-between gap-3 py-1.5 first:pt-0 last:pb-0">
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800">{produto.descricao || '-'}</span>
             <span className="shrink-0 text-xs text-gray-400">ERP {produto.codigo || '-'}</span>
-            {produto.quantidade != null && (
+            {onQuantidadeChange ? (
+              <label className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-gray-600">
+                Qtd
+                <input
+                  type="number"
+                  min={1}
+                  value={produto.quantidade ?? ''}
+                  onChange={event => {
+                    const parsed = Math.max(1, Math.round(Number(event.target.value)) || 1)
+                    onQuantidadeChange(index, parsed)
+                  }}
+                  className="h-7 w-14 rounded-md border border-gray-200 px-1 text-center text-xs outline-none focus:border-blue-400"
+                />
+                {produto.valorUnitario != null && <span className="text-gray-400">{money(produto.valorUnitario)} un.</span>}
+              </label>
+            ) : produto.quantidade != null && (
               <span className="shrink-0 text-xs font-semibold text-gray-600">
                 Qtd {produto.quantidade}{produto.valorUnitario != null ? ` · ${money(produto.valorUnitario)} un.` : ''}
               </span>
