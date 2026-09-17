@@ -291,15 +291,17 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
     }
   }
 
-  async function loadPedidoFromPcp() {
+  async function loadPedidoFromPcp(silent = false) {
     if (!selected?.numero_pedido) return null
     try {
       const { data } = await api.pcpPedido(getToken, selected.numero_pedido)
-      if (!data) toast.warning('Pedido não encontrado no PCP.')
-      else toast.success('Pedido encontrado no PCP.')
+      if (!silent) {
+        if (!data) toast.warning('Pedido não encontrado no PCP.')
+        else toast.success('Pedido encontrado no PCP.')
+      }
       return data
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Falha ao consultar PCP.')
+      if (!silent) toast.error(error instanceof Error ? error.message : 'Falha ao consultar PCP.')
       return null
     }
   }
@@ -658,7 +660,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   onSaveAtendimento: (id: string, form: WizardForm) => Promise<void>
   onSaveReembolso: (valor: number | null, motivo: string) => Promise<void>
   onAddNote: (produtoId?: string | null, produtoDescricao?: string | null) => void
-  onLoadPedido: () => Promise<PcpPedido | null>
+  onLoadPedido: (silent?: boolean) => Promise<PcpPedido | null>
   onSyncPedido: () => Promise<PcpPedido | null>
   onReabrir: (motivo: string, produtoId: string, produtoDescricao: string | null) => Promise<void>
   onDelete: () => Promise<void>
@@ -703,6 +705,19 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
     setNoteProdutoId('')
   }, [selected.id, selected.status, selected.updated_at, selected.reembolso_valor, selected.reembolso_motivo])
 
+  useEffect(() => {
+    if (getItensDetalhados(selected)) return
+    const produtos = parseProdutos(selected.descricao_produto, selected.codigo_produto)
+    if (!produtos || produtos.length < 2) return
+    ensurePedidoLoaded(true)
+  }, [selected.id])
+
+  useEffect(() => {
+    if (editItens || !pedido) return
+    const fallback = matchItensComPedido(editForm.descricao_produto, editForm.codigo_produto, pedido)
+    if (fallback) setEditItens(fallback)
+  }, [pedido])
+
   function requestClose() {
     if (closing) return
     setClosing(true)
@@ -731,11 +746,11 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
     }
   }
 
-  async function ensurePedidoLoaded() {
+  async function ensurePedidoLoaded(silent = false) {
     if (pedido || loadingPedido) return pedido
     setLoadingPedido(true)
     try {
-      const result = await onLoadPedido()
+      const result = await onLoadPedido(silent)
       setPedido(result)
       return result
     } finally {
@@ -823,7 +838,8 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   }
 
   const itensDetalhados = getItensDetalhados(selected)
-  const multiplosProdutos = (itensDetalhados?.length ?? 0) > 1
+  const itensParaExibir = itensDetalhados ?? matchItensComPedido(selected.descricao_produto, selected.codigo_produto, pedido)
+  const multiplosProdutos = (itensParaExibir?.length ?? 0) > 1
 
   return (
     <div className={`${closing ? 'drawer-backdrop-out' : 'drawer-backdrop-in'} fixed inset-0 z-30 bg-gray-950/30 p-4 backdrop-blur-sm`} onMouseDown={requestClose}>
@@ -992,14 +1008,14 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                     className="sm:col-span-2"
                     descricaoProduto={selected.descricao_produto}
                     codigoProduto={selected.codigo_produto}
-                    itens={itensDetalhados}
+                    itens={itensParaExibir}
                   />
                   {!multiplosProdutos && <Info label="Quantidade" value={selected.quantidade?.toString()} />}
                   {!multiplosProdutos && <Info label="Valor unitario" value={money(selected.valor_unitario)} />}
                   {multiplosProdutos && (
                     <Info
                       label="Quantidade total"
-                      value={itensDetalhados!.reduce((total, item) => total + (item.quantidade ?? 0), 0).toString()}
+                      value={itensParaExibir!.reduce((total, item) => total + (item.quantidade ?? 0), 0).toString()}
                     />
                   )}
                   <Info label="Valor total" value={money(selected.valor_total)} />
@@ -2454,6 +2470,24 @@ function getItensDetalhados(atendimento: Atendimento): ProdutoDetalhado[] | null
     valorUnitario: item?.valor_unitario != null && Number.isFinite(Number(item.valor_unitario)) ? Number(item.valor_unitario) : null,
     valorTotal: item?.valor_total != null && Number.isFinite(Number(item.valor_total)) ? Number(item.valor_total) : null,
   }))
+}
+
+// Fallback para chamados antigos sem pcp_payload.itens: casa cada produto pelo codigo ERP
+// com o pedido real do PCP (ja carregado na tela) para recuperar a quantidade/valor de cada item.
+function matchItensComPedido(descricaoProduto: string | null | undefined, codigoProduto: string | null | undefined, pedido: PcpPedido | null): ProdutoDetalhado[] | null {
+  if (!pedido) return null
+  const produtos = parseProdutos(descricaoProduto, codigoProduto)
+  if (!produtos || !produtos.length) return null
+  return produtos.map(produto => {
+    const match = pedido.itens.find(item => item.codigo_produto === produto.codigo)
+    return {
+      descricao: produto.descricao,
+      codigo: produto.codigo,
+      quantidade: match?.quantidade ?? null,
+      valorUnitario: match?.valor_unitario ?? null,
+      valorTotal: match?.valor_total ?? null,
+    }
+  })
 }
 
 function removeProduto(descricaoProduto: string | null | undefined, codigoProduto: string | null | undefined, indexToRemove: number) {
