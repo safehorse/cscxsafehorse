@@ -169,3 +169,10 @@ export interface WhatsappExtensaoStatus {
   ultimo_ping: string | null
 }
 
+
+export interface KanbanConfig {
+  order: string[]
+  names: Record<string, string>
+  custom: string[]
+  deleted: string[]
+}

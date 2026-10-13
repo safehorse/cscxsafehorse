@@ -15,7 +15,7 @@ import { toast } from 'sonner'
 import { Layout } from '../components/Layout'
 import { api } from '../lib/api'
 import { getStatusTone } from '../lib/statusStyles'
-import type { Atendimento, CadastroOptions } from '../lib/types'
+import type { Atendimento, CadastroOptions, KanbanConfig } from '../lib/types'
 import { DetailDrawer, formToPayload, type WizardForm } from './DashboardPage'
 
 const DEFAULT_STATUS_ORDER = [
@@ -29,38 +29,18 @@ const DEFAULT_STATUS_ORDER = [
   'FINALIZADO',
 ]
 
-const CUSTOM_COLUMNS_KEY = 'cscx-kanban-custom-columns'
-
-const NAMES_KEY = 'cscx-kanban-column-names'
-
-const STORAGE_KEY = 'cscx-kanban-column-order'
-
 export function KanbanPage() {
   const { getToken } = useAuth()
   const { user } = useUser()
   const [items, setItems] = useState<Atendimento[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [columnOrder, setColumnOrder] = useState<string[]>(() => loadColumnOrder())
-  const [customColumns, setCustomColumns] = useState<string[]>(() => {
-    try {
-      const value = JSON.parse(localStorage.getItem(CUSTOM_COLUMNS_KEY) || '[]')
-      return Array.isArray(value) ? unique(value.filter(entry => typeof entry === 'string' && entry.trim())) : []
-    } catch { return [] }
-  })
+  const [config, setConfig] = useState<KanbanConfig>({ order: [], names: {}, custom: [], deleted: [] })
+  const configVersion = useRef(0)
+  const [configReady, setConfigReady] = useState(false)
+  const [savingColumn, setSavingColumn] = useState(false)
   const [creatingColumn, setCreatingColumn] = useState(false)
-  const [deletedColumns, setDeletedColumns] = useState<string[]>(() => {
-    try {
-      const value = JSON.parse(localStorage.getItem('cscx-kanban-deleted-columns') || '[]')
-      return Array.isArray(value) ? value.filter(entry => typeof entry === 'string') : []
-    } catch { return [] }
-  })
-  const [columnNames, setColumnNames] = useState<Record<string, string>>(() => {
-    try {
-      const value = JSON.parse(localStorage.getItem(NAMES_KEY) || '{}')
-      return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
-    } catch { return {} }
-  })
+  const { order: columnOrder, names: columnNames, custom: customColumns, deleted: deletedColumns } = config
   const [editingColumn, setEditingColumn] = useState<string | null>(null)
   const [columnName, setColumnName] = useState('')
   const [columnPosition, setColumnPosition] = useState(1)
@@ -107,8 +87,11 @@ export function KanbanPage() {
   async function load() {
     setLoading(true)
     try {
-      const { data } = await api.kanbanAtendimentos(getToken)
-      setItems(data)
+      const [board, settings] = await Promise.all([api.kanbanAtendimentos(getToken), api.kanbanConfig(getToken)])
+      setItems(board.data)
+      setConfig(settings.config)
+      configVersion.current = settings.version
+      setConfigReady(true)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao carregar Kanban.')
     } finally {
@@ -240,15 +223,29 @@ export function KanbanPage() {
     return data
   }
 
-  function persistOrder(nextOrder: string[]) {
-    setColumnOrder(nextOrder)
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextOrder))
+  async function saveColumnConfig(next: KanbanConfig) {
+    if (savingColumn) return false
+    setSavingColumn(true)
+    try {
+      const saved = await api.saveKanbanConfig(getToken, next, configVersion.current)
+      setConfig(saved.config)
+      configVersion.current = saved.version
+      return true
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao salvar colunas.')
+      await load()
+      return false
+    } finally { setSavingColumn(false) }
+  }
+
+  function persistOrder(order: string[]) {
+    return saveColumnConfig({ ...config, order })
   }
 
   function moveColumn(status: string, direction: -1 | 1) {
     const from = statuses.indexOf(status)
     const to = from + direction
-    if (from < 0 || to < 0 || to >= statuses.length) return
+    if (savingColumn || from < 0 || to < 0 || to >= statuses.length) return
     persistOrder(arrayMove(statuses, from, to))
   }
 
@@ -339,6 +336,28 @@ export function KanbanPage() {
     api.syncUsuario(getToken, { email, nome: user.fullName }).catch(() => null)
   }, [user?.id])
 
+  useEffect(() => {
+    let active = true
+    let pending = false
+    async function syncBoard() {
+      if (pending || document.hidden || creatingColumn || editingColumn || savingColumn || draggingStatus || draggingItemId) return
+      pending = true
+      try {
+        const [board, settings] = await Promise.all([api.kanbanAtendimentos(getToken), api.kanbanConfig(getToken)])
+        if (active) {
+          setItems(board.data)
+          setConfig(settings.config)
+          configVersion.current = settings.version
+          setConfigReady(true)
+        }
+      } catch { /* Mantem o quadro durante falhas temporarias de rede. */ }
+      finally { pending = false }
+    }
+    const interval = window.setInterval(syncBoard, 5000)
+    window.addEventListener('focus', syncBoard)
+    return () => { active = false; clearInterval(interval); window.removeEventListener('focus', syncBoard) }
+  }, [getToken, creatingColumn, editingColumn, savingColumn, draggingStatus, draggingItemId])
+
   return (
     <Layout>
       <div className="min-h-0 flex-1 px-4 py-5 sm:px-6">
@@ -355,7 +374,7 @@ export function KanbanPage() {
                 </div>
               </div>
               <div className="flex-1" />
-              <button type="button" onClick={() => { setCreatingColumn(true); setEditingColumn(null); setColumnName(''); setColumnPosition(statuses.length + 1) }} className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700"><Plus size={16} />Nova coluna</button>
+              <button type="button" disabled={!configReady || savingColumn} onClick={() => { setCreatingColumn(true); setEditingColumn(null); setColumnName(''); setColumnPosition(statuses.length + 1) }} className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700"><Plus size={16} />Nova coluna</button>
               <div className="relative min-w-[240px] flex-1 sm:max-w-md">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -494,7 +513,7 @@ export function KanbanPage() {
       </div>
 
       {(editingColumn || creatingColumn) && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label={creatingColumn ? 'Nova coluna' : 'Editar coluna'}>
-        <form className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-5" onSubmit={event => {
+        <form className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-5" onSubmit={async event => {
           event.preventDefault()
           if (!columnName.trim()) return
           if (creatingColumn) {
@@ -506,43 +525,31 @@ export function KanbanPage() {
             const names = { ...columnNames, [status]: columnName.trim() }
             const order = [...statuses]
             order.splice(Math.min(columnPosition - 1, order.length), 0, status)
-            try {
-              localStorage.setItem(CUSTOM_COLUMNS_KEY, JSON.stringify(custom))
-              localStorage.setItem('cscx-kanban-deleted-columns', JSON.stringify(deleted))
-              localStorage.setItem(NAMES_KEY, JSON.stringify(names))
-              persistOrder(order)
-              setCustomColumns(custom)
-              setDeletedColumns(deleted)
-              setColumnNames(names)
+            if (await saveColumnConfig({ order, names, custom, deleted })) {
               setCreatingColumn(false)
               toast.success('Coluna criada.')
-            } catch { toast.error('Não foi possível criar a coluna no navegador.') }
+            }
             return
           }
           if (!editingColumn) return
           const names = { ...columnNames, [editingColumn]: columnName.trim() }
-          try {
-            localStorage.setItem(NAMES_KEY, JSON.stringify(names))
-            persistOrder(arrayMove(statuses, statuses.indexOf(editingColumn), columnPosition - 1))
-            setColumnNames(names)
+          if (await saveColumnConfig({ ...config, names, order: arrayMove(statuses, statuses.indexOf(editingColumn), columnPosition - 1) })) {
             setEditingColumn(null)
             toast.success('Coluna atualizada.')
-          } catch { toast.error('Não foi possível salvar a coluna no navegador.') }
+          }
         }}>
           <h2 className="font-bold">{creatingColumn ? 'Nova coluna' : 'Editar coluna'}</h2>
           <label className="block text-sm">Nome<input required maxLength={80} value={columnName} onChange={event => setColumnName(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label>
           <label className="block text-sm">Posição<select value={columnPosition} onChange={event => setColumnPosition(Number(event.target.value))} className="mt-1 w-full rounded-lg border p-2">{Array.from({ length: statuses.length + (creatingColumn ? 1 : 0) }, (_, index) => <option key={index} value={index + 1}>{index + 1}</option>)}</select></label>
-          {editingColumn && <button type="button" disabled={items.some(item => (item.status || 'ABERTO') === editingColumn)} title="Mova os chamados antes de excluir a coluna" onClick={() => {
+          {editingColumn && <button type="button" disabled={savingColumn || items.some(item => (item.status || 'ABERTO') === editingColumn)} title="Mova os chamados antes de excluir a coluna" onClick={async () => {
             const next = unique([...deletedColumns, editingColumn])
-            try {
-              localStorage.setItem('cscx-kanban-deleted-columns', JSON.stringify(next))
-              setDeletedColumns(next)
+            if (await saveColumnConfig({ ...config, deleted: next, order: statuses.filter(status => status !== editingColumn) })) {
               setEditingColumn(null)
-              toast.success('Coluna excluída do quadro.')
-            } catch { toast.error('Não foi possível excluir a coluna no navegador.') }
+              toast.success('Coluna excluida do quadro.')
+            }
           }} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 disabled:opacity-40">Excluir coluna</button>}
           {items.some(item => (item.status || 'ABERTO') === editingColumn) && <p className="text-xs text-gray-500">Mova todos os chamados desta coluna antes de excluir.</p>}
-          <div className="flex justify-end gap-2"><button type="button" onClick={() => { setEditingColumn(null); setCreatingColumn(false) }} className="rounded-lg border px-3 py-2">Cancelar</button><button className="rounded-lg bg-blue-600 px-3 py-2 text-white">Salvar</button></div>
+          <div className="flex justify-end gap-2"><button type="button" onClick={() => { setEditingColumn(null); setCreatingColumn(false) }} className="rounded-lg border px-3 py-2">Cancelar</button><button disabled={savingColumn} className="rounded-lg bg-blue-600 px-3 py-2 text-white disabled:opacity-40">{savingColumn ? 'Salvando...' : 'Salvar'}</button></div>
         </form>
       </div>}
       {selected && (
@@ -568,15 +575,6 @@ export function KanbanPage() {
       )}
     </Layout>
   )
-}
-
-function loadColumnOrder() {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '[]')
-    return Array.isArray(parsed) ? parsed.filter(item => typeof item === 'string') : DEFAULT_STATUS_ORDER
-  } catch {
-    return DEFAULT_STATUS_ORDER
-  }
 }
 
 function mergeOrder(savedOrder: string[], statuses: string[]) {

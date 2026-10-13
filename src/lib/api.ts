@@ -1,5 +1,6 @@
 import type {
   Atendimento,
+  KanbanConfig,
   CadastroOptions,
   Cliente,
   ClienteSugestao,
@@ -85,6 +86,12 @@ export const api = {
 
   atendimento: (getToken: () => Promise<string | null>, id: string) =>
     request<{ data: Atendimento }>(`/api/atendimentos/${id}`, getToken),
+
+  kanbanConfig: (getToken: () => Promise<string | null>) =>
+    request<{ config: KanbanConfig; version: number }>('/api/kanban/config', getToken),
+
+  saveKanbanConfig: (getToken: () => Promise<string | null>, config: KanbanConfig, version: number) =>
+    request<{ config: KanbanConfig; version: number }>('/api/kanban/config', getToken, { method: 'PUT', body: JSON.stringify({ config, version }) }),
 
   kanbanAtendimentos: (getToken: () => Promise<string | null>, filters: AtendimentoFilters = {}) => {
     const qs = buildAtendimentoQuery(filters)

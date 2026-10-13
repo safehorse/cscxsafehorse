@@ -26,3 +26,13 @@ Antes de usar os resultados de finalizacao, aplique a migration:
 ```powershell
 psql $env:DATABASE_URL -f database/migrations/020_finalizacao_detalhes.sql
 ```
+
+## Colunas compartilhadas do Kanban
+
+A configuracao das colunas e compartilhada por todos os usuarios. Aplique antes de publicar:
+
+```powershell
+psql $env:DATABASE_URL -f database/migrations/021_shared_kanban_columns.sql
+```
+
+Configuracoes antigas salvas no navegador nao sao importadas automaticamente.

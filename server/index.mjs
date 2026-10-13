@@ -541,6 +541,42 @@ app.get('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   res.json({ data: { ...atendimento.rows[0], interacoes: interacoes.rows, agenda: agenda.rows } })
 }))
 
+app.get('/api/kanban/config', asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query('select config, version from cscx_kanban_config where id = 1')
+  res.json(rows[0])
+}))
+
+app.put('/api/kanban/config', asyncRoute(async (req, res) => {
+  const { config, version } = req.body
+  const validList = value => Array.isArray(value) && value.length <= 200 && value.every(entry => typeof entry === 'string' && entry.trim() && entry.length <= 80) && new Set(value).size === value.length
+  if (!config || !['order', 'custom', 'deleted'].every(key => validList(config[key])) || !config.names || typeof config.names !== 'object' || Array.isArray(config.names) || Object.keys(config.names).length > 200 || !Object.entries(config.names).every(([key, value]) => key.length <= 80 && typeof value === 'string' && value.trim() && value.length <= 80) || !Number.isInteger(version)) {
+    return res.status(400).json({ error: 'Configuracao de colunas invalida.' })
+  }
+  const client = await pool.connect()
+  try {
+    await client.query('begin')
+    const { rows } = await client.query('select config, version from cscx_kanban_config where id = 1 for update')
+    if (rows[0].version !== version) {
+      await client.query('rollback')
+      return res.status(409).json({ error: 'Outro usuario alterou as colunas. Atualize o quadro e tente novamente.' })
+    }
+    const newlyDeleted = config.deleted.filter(status => !rows[0].config.deleted.includes(status))
+    if (newlyDeleted.length) {
+      const occupied = await client.query('select 1 from cscx_atendimentos where status = any($1::text[]) limit 1', [newlyDeleted])
+      if (occupied.rowCount) {
+        await client.query('rollback')
+        return res.status(400).json({ error: 'Mova os chamados antes de excluir a coluna.' })
+      }
+    }
+    const saved = await client.query('update cscx_kanban_config set config = $1, version = version + 1 where id = 1 returning config, version', [JSON.stringify(config)])
+    await client.query('commit')
+    res.json(saved.rows[0])
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally { client.release() }
+}))
+
 app.get('/api/kanban/atendimentos', asyncRoute(async (req, res) => {
   const filters = buildAtendimentoFilters(req.query)
   const whereSql = filters.where.length ? `where ${filters.where.join(' and ')}` : ''
