@@ -203,12 +203,13 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
     }
   }
 
-  async function saveStatus(nextStatus: string) {
+  async function saveStatus(nextStatus: string, resultado?: string, detalhes?: string) {
     if (!selected) return
     try {
       const isDone = ['FINALIZADO', 'CONCLUIDO'].includes(nextStatus)
       const { data } = await api.updateAtendimento(getToken, selected.id, {
         status: nextStatus,
+        ...(resultado !== undefined ? { finalizacao_resultado: resultado || null, finalizacao_detalhes: detalhes?.trim() || null } : {}),
         concluido_em: isDone ? selected.concluido_em ?? new Date().toISOString() : null,
       })
       setSelected(prev => prev ? { ...prev, ...data } : data)
@@ -656,7 +657,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   cadastros: CadastroOptions
   onCadastroChanged: () => void
   onClose: () => void
-  onSaveStatus: (status: string) => Promise<void>
+  onSaveStatus: (status: string, resultado?: string, detalhes?: string) => Promise<void>
   onSaveAtendimento: (id: string, form: WizardForm) => Promise<void>
   onSaveReembolso: (valor: number | null, motivo: string) => Promise<void>
   onAddNote: (produtoId?: string | null, produtoDescricao?: string | null) => void
@@ -668,6 +669,8 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   const [closing, setClosing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [draftStatus, setDraftStatus] = useState(selected.status)
+  const [resultado, setResultado] = useState(selected.finalizacao_resultado ?? '')
+  const [detalhesFinalizacao, setDetalhesFinalizacao] = useState(selected.finalizacao_detalhes ?? '')
   const [savingStatus, setSavingStatus] = useState(false)
   const [showReembolso, setShowReembolso] = useState(Boolean(selected.reembolso_valor || selected.reembolso_motivo))
   const [reembolsoValor, setReembolsoValor] = useState(selected.reembolso_valor != null ? String(selected.reembolso_valor) : '')
@@ -686,11 +689,13 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   const [reabrirProdutoId, setReabrirProdutoId] = useState('')
   const [savingReabrir, setSavingReabrir] = useState(false)
   const [noteProdutoId, setNoteProdutoId] = useState('')
-  const statusChanged = draftStatus !== selected.status
+  const statusChanged = draftStatus !== selected.status || (draftStatus === 'FINALIZADO' && (resultado !== (selected.finalizacao_resultado ?? '') || detalhesFinalizacao !== (selected.finalizacao_detalhes ?? '')))
 
   useEffect(() => {
     setClosing(false)
     setDraftStatus(selected.status)
+    setResultado(selected.finalizacao_resultado ?? '')
+    setDetalhesFinalizacao(selected.finalizacao_detalhes ?? '')
     setShowReembolso(Boolean(selected.reembolso_valor || selected.reembolso_motivo))
     setReembolsoValor(selected.reembolso_valor != null ? String(selected.reembolso_valor) : '')
     setReembolsoMotivo(selected.reembolso_motivo ?? '')
@@ -728,7 +733,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
     if (!statusChanged) return
     setSavingStatus(true)
     try {
-      await onSaveStatus(draftStatus)
+      await onSaveStatus(draftStatus, draftStatus === 'FINALIZADO' ? resultado : undefined, detalhesFinalizacao)
     } finally {
       setSavingStatus(false)
     }
@@ -1131,6 +1136,11 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
               </section>
             )}
 
+            {draftStatus === 'FINALIZADO' && <section className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <h3 className="text-sm font-semibold">Detalhes da finalização</h3>
+              <label className="block text-sm">Resultado<select value={resultado} onChange={event => setResultado(event.target.value)} className="mt-1 w-full rounded-lg border bg-white p-2"><option value="">Sem resultado específico</option>{['Crédito gerado', 'Troca gerada', 'Crédito e troca gerados', 'Resolvido sem crédito ou troca', 'Outro'].map(value => <option key={value}>{value}</option>)}</select></label>
+              <label className="block text-sm">Descrição<textarea value={detalhesFinalizacao} onChange={event => setDetalhesFinalizacao(event.target.value)} placeholder="Informe valor do crédito, pedido da troca ou outros detalhes..." className="mt-1 w-full rounded-lg border bg-white p-2" rows={3} /></label>
+            </section>}
             <section className="flex flex-wrap gap-2">
               {STATUS_OPTIONS.map(option => (
                 <button

@@ -20,6 +20,8 @@ export interface Atendimento {
   descricao_situacao: string | null
   prioridade: 'baixa' | 'normal' | 'alta' | 'urgente'
   agendado_para: string | null
+  finalizacao_resultado?: string | null
+  finalizacao_detalhes?: string | null
   concluido_em: string | null
   reembolso_valor: number | null
   reembolso_motivo: string | null

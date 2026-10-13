@@ -596,6 +596,7 @@ app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
     'proxima_acao', 'status', 'novo_pedido', 'cliente_tem_desconto', 'vendedor',
     'descricao_situacao', 'prioridade', 'agendado_para', 'concluido_em',
     'reembolso_valor', 'reembolso_motivo', 'reembolso_em',
+    'finalizacao_resultado', 'finalizacao_detalhes',
     'pcp_pedido_id', 'pcp_item_id', 'pcp_payload',
   ]
   const sets = []

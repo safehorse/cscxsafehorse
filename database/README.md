@@ -18,3 +18,11 @@ psql $env:DATABASE_URL -f database/migrations/002_wizard_cadastros.sql
 - `cscx_interacoes`: historico de contato, notas, WhatsApp, email e ligacoes.
 - `cscx_usuarios`: vinculo operacional com usuarios Clerk.
 - `cscx_setores` e `cscx_responsaveis`: cadastros usados no wizard.
+
+## Detalhes da finalizacao
+
+Antes de usar os resultados de finalizacao, aplique a migration:
+
+```powershell
+psql $env:DATABASE_URL -f database/migrations/020_finalizacao_detalhes.sql
+```

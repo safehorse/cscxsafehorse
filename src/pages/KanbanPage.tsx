@@ -6,6 +6,7 @@ import {
   Grid3X3,
   LoaderCircle,
   Phone,
+  Pencil,
   RefreshCw,
   Search,
 } from 'lucide-react'
@@ -27,6 +28,8 @@ const DEFAULT_STATUS_ORDER = [
   'FINALIZADO',
 ]
 
+const NAMES_KEY = 'cscx-kanban-column-names'
+
 const STORAGE_KEY = 'cscx-kanban-column-order'
 
 export function KanbanPage() {
@@ -36,6 +39,21 @@ export function KanbanPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [columnOrder, setColumnOrder] = useState<string[]>(() => loadColumnOrder())
+  const [deletedColumns, setDeletedColumns] = useState<string[]>(() => {
+    try {
+      const value = JSON.parse(localStorage.getItem('cscx-kanban-deleted-columns') || '[]')
+      return Array.isArray(value) ? value.filter(entry => typeof entry === 'string') : []
+    } catch { return [] }
+  })
+  const [columnNames, setColumnNames] = useState<Record<string, string>>(() => {
+    try {
+      const value = JSON.parse(localStorage.getItem(NAMES_KEY) || '{}')
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+    } catch { return {} }
+  })
+  const [editingColumn, setEditingColumn] = useState<string | null>(null)
+  const [columnName, setColumnName] = useState('')
+  const [columnPosition, setColumnPosition] = useState(1)
   const [draggingStatus, setDraggingStatus] = useState<string | null>(null)
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null)
@@ -48,8 +66,8 @@ export function KanbanPage() {
 
   const statuses = useMemo(() => {
     const found = unique(items.map(item => item.status).filter(Boolean))
-    return mergeOrder(columnOrder, unique([...DEFAULT_STATUS_ORDER, ...found]))
-  }, [items, columnOrder])
+    return mergeOrder(columnOrder, unique([...DEFAULT_STATUS_ORDER.filter(status => !deletedColumns.includes(status)), ...found]))
+  }, [items, columnOrder, deletedColumns])
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -108,12 +126,13 @@ export function KanbanPage() {
     }
   }
 
-  async function saveStatus(nextStatus: string) {
+  async function saveStatus(nextStatus: string, resultado?: string, detalhes?: string) {
     if (!selected) return
     try {
       const isDone = ['FINALIZADO', 'CONCLUIDO'].includes(nextStatus)
       const { data } = await api.updateAtendimento(getToken, selected.id, {
         status: nextStatus,
+        ...(resultado !== undefined ? { finalizacao_resultado: resultado || null, finalizacao_detalhes: detalhes?.trim() || null } : {}),
         concluido_em: isDone ? selected.concluido_em ?? new Date().toISOString() : null,
       })
       setSelected(prev => prev ? { ...prev, ...data } : data)
@@ -241,6 +260,11 @@ export function KanbanPage() {
     if (!item || item.status === targetStatus) return
     if (item.status === 'FINALIZADO') {
       toast.warning('Chamado finalizado só reabre com motivo e produto vinculado. Abra o chamado e use "Reabrir chamado".')
+      return
+    }
+    if (targetStatus === 'FINALIZADO') {
+      await openDetail(itemId)
+      toast.info('Selecione Finalizado e informe os detalhes da finalização.')
       return
     }
     const previousStatus = item.status
@@ -379,7 +403,8 @@ export function KanbanPage() {
                       >
                         <div className="flex items-center gap-2">
                           <span className={`h-2.5 w-2.5 rounded-full ${tone.dot}`} />
-                          <h2 className={`min-w-0 flex-1 truncate text-sm font-bold ${tone.text}`}>{status}</h2>
+                          <h2 className={`min-w-0 flex-1 truncate text-sm font-bold ${tone.text}`}>{columnNames[status] || status}</h2>
+                          <button type="button" title="Editar nome e posição da coluna" onClick={() => { setEditingColumn(status); setColumnName(columnNames[status] || status); setColumnPosition(index + 1) }} className="grid h-7 w-7 place-items-center rounded-lg bg-white/80 text-gray-500 hover:bg-white"><Pencil size={14} /></button>
                           <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-bold text-gray-700">{rows.length}</span>
                           <button
                             type="button"
@@ -433,6 +458,7 @@ export function KanbanPage() {
                               </div>
                               <p className="truncate text-sm font-medium text-gray-700">{item.cliente ?? 'Cliente não informado'}</p>
                               <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-400">{item.descricao_produto ?? item.motivo ?? 'Sem descrição'}</p>
+                              {item.status === 'FINALIZADO' && (item.finalizacao_resultado || item.finalizacao_detalhes) && <div className="mt-2 rounded-lg bg-emerald-50 p-2 text-xs text-emerald-800"><p className="font-semibold">{item.finalizacao_resultado}</p><p className="line-clamp-2">{item.finalizacao_detalhes}</p></div>}
                               {item.whatsapp_telefone && (
                                 <p className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
                                   <Phone size={11} />
@@ -456,6 +482,35 @@ export function KanbanPage() {
         </div>
       </div>
 
+      {editingColumn && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Editar coluna">
+        <form className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-5" onSubmit={event => {
+          event.preventDefault()
+          if (!columnName.trim()) return
+          const names = { ...columnNames, [editingColumn]: columnName.trim() }
+          try {
+            localStorage.setItem(NAMES_KEY, JSON.stringify(names))
+            persistOrder(arrayMove(statuses, statuses.indexOf(editingColumn), columnPosition - 1))
+            setColumnNames(names)
+            setEditingColumn(null)
+            toast.success('Coluna atualizada.')
+          } catch { toast.error('Não foi possível salvar a coluna no navegador.') }
+        }}>
+          <h2 className="font-bold">Editar coluna</h2>
+          <label className="block text-sm">Nome<input required maxLength={80} value={columnName} onChange={event => setColumnName(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label>
+          <label className="block text-sm">Posição<select value={columnPosition} onChange={event => setColumnPosition(Number(event.target.value))} className="mt-1 w-full rounded-lg border p-2">{statuses.map((_, index) => <option key={index} value={index + 1}>{index + 1}</option>)}</select></label>
+          <button type="button" disabled={items.some(item => (item.status || 'ABERTO') === editingColumn)} title="Mova os chamados antes de excluir a coluna" onClick={() => {
+            const next = unique([...deletedColumns, editingColumn])
+            try {
+              localStorage.setItem('cscx-kanban-deleted-columns', JSON.stringify(next))
+              setDeletedColumns(next)
+              setEditingColumn(null)
+              toast.success('Coluna excluída do quadro.')
+            } catch { toast.error('Não foi possível excluir a coluna no navegador.') }
+          }} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 disabled:opacity-40">Excluir coluna</button>
+          {items.some(item => (item.status || 'ABERTO') === editingColumn) && <p className="text-xs text-gray-500">Mova todos os chamados desta coluna antes de excluir.</p>}
+          <div className="flex justify-end gap-2"><button type="button" onClick={() => setEditingColumn(null)} className="rounded-lg border px-3 py-2">Cancelar</button><button className="rounded-lg bg-blue-600 px-3 py-2 text-white">Salvar</button></div>
+        </form>
+      </div>}
       {selected && (
         <DetailDrawer
           selected={selected}
