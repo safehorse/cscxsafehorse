@@ -648,7 +648,7 @@ export function DashboardPage({ mode = 'dashboard' }: { mode?: DashboardMode }) 
   )
 }
 
-export function DetailDrawer({ selected, loading, note, setNote, getToken, cadastros, onCadastroChanged, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido, onSyncPedido, onReabrir, onDelete }: {
+export function DetailDrawer({ statusOptions = STATUS_OPTIONS, selected, loading, note, setNote, getToken, cadastros, onCadastroChanged, onClose, onSaveStatus, onSaveAtendimento, onSaveReembolso, onAddNote, onLoadPedido, onSyncPedido, onReabrir, onDelete }: {
   selected: Atendimento
   loading: boolean
   note: string
@@ -657,6 +657,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   cadastros: CadastroOptions
   onCadastroChanged: () => void
   onClose: () => void
+  statusOptions?: string[]
   onSaveStatus: (status: string, resultado?: string, detalhes?: string) => Promise<void>
   onSaveAtendimento: (id: string, form: WizardForm) => Promise<void>
   onSaveReembolso: (valor: number | null, motivo: string) => Promise<void>
@@ -666,6 +667,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
   onReabrir: (motivo: string, produtoId: string, produtoDescricao: string | null) => Promise<void>
   onDelete: () => Promise<void>
 }) {
+  const availableStatuses = Array.from(new Set([...statusOptions, selected.status]))
   const [closing, setClosing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [draftStatus, setDraftStatus] = useState(selected.status)
@@ -967,7 +969,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
                   <MoneyField label="Valor total" value={editForm.valor_total} onChange={value => updateEdit('valor_total', value)} />
                   <Field label="Vendedor" value={editForm.vendedor} onChange={value => updateEdit('vendedor', value)} />
                   <Field label="Motivo" value={editForm.motivo} onChange={value => updateEdit('motivo', value)} />
-                  <SelectField label="Status" value={editForm.status} options={STATUS_OPTIONS} onChange={value => updateEdit('status', value)} />
+                  <SelectField label="Status" value={editForm.status} options={availableStatuses} onChange={value => updateEdit('status', value)} />
                   <Listbox
                     label="Setor"
                     value={editForm.setor}
@@ -1142,7 +1144,7 @@ export function DetailDrawer({ selected, loading, note, setNote, getToken, cadas
               <label className="block text-sm">Descrição<textarea value={detalhesFinalizacao} onChange={event => setDetalhesFinalizacao(event.target.value)} placeholder="Informe valor do crédito, pedido da troca ou outros detalhes..." className="mt-1 w-full rounded-lg border bg-white p-2" rows={3} /></label>
             </section>}
             <section className="flex flex-wrap gap-2">
-              {STATUS_OPTIONS.map(option => (
+              {availableStatuses.map(option => (
                 <button
                   key={option}
                   type="button"

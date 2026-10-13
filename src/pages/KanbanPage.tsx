@@ -7,6 +7,7 @@ import {
   LoaderCircle,
   Phone,
   Pencil,
+  Plus,
   RefreshCw,
   Search,
 } from 'lucide-react'
@@ -28,6 +29,8 @@ const DEFAULT_STATUS_ORDER = [
   'FINALIZADO',
 ]
 
+const CUSTOM_COLUMNS_KEY = 'cscx-kanban-custom-columns'
+
 const NAMES_KEY = 'cscx-kanban-column-names'
 
 const STORAGE_KEY = 'cscx-kanban-column-order'
@@ -39,6 +42,13 @@ export function KanbanPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [columnOrder, setColumnOrder] = useState<string[]>(() => loadColumnOrder())
+  const [customColumns, setCustomColumns] = useState<string[]>(() => {
+    try {
+      const value = JSON.parse(localStorage.getItem(CUSTOM_COLUMNS_KEY) || '[]')
+      return Array.isArray(value) ? unique(value.filter(entry => typeof entry === 'string' && entry.trim())) : []
+    } catch { return [] }
+  })
+  const [creatingColumn, setCreatingColumn] = useState(false)
   const [deletedColumns, setDeletedColumns] = useState<string[]>(() => {
     try {
       const value = JSON.parse(localStorage.getItem('cscx-kanban-deleted-columns') || '[]')
@@ -66,8 +76,8 @@ export function KanbanPage() {
 
   const statuses = useMemo(() => {
     const found = unique(items.map(item => item.status).filter(Boolean))
-    return mergeOrder(columnOrder, unique([...DEFAULT_STATUS_ORDER.filter(status => !deletedColumns.includes(status)), ...found]))
-  }, [items, columnOrder, deletedColumns])
+    return mergeOrder(columnOrder, unique([...unique([...DEFAULT_STATUS_ORDER, ...customColumns]).filter(status => !deletedColumns.includes(status)), ...found]))
+  }, [items, columnOrder, deletedColumns, customColumns])
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -345,6 +355,7 @@ export function KanbanPage() {
                 </div>
               </div>
               <div className="flex-1" />
+              <button type="button" onClick={() => { setCreatingColumn(true); setEditingColumn(null); setColumnName(''); setColumnPosition(statuses.length + 1) }} className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700"><Plus size={16} />Nova coluna</button>
               <div className="relative min-w-[240px] flex-1 sm:max-w-md">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -482,10 +493,33 @@ export function KanbanPage() {
         </div>
       </div>
 
-      {editingColumn && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Editar coluna">
+      {(editingColumn || creatingColumn) && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label={creatingColumn ? 'Nova coluna' : 'Editar coluna'}>
         <form className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-5" onSubmit={event => {
           event.preventDefault()
           if (!columnName.trim()) return
+          if (creatingColumn) {
+            const status = normalizeColumnStatus(columnName)
+            const duplicate = statuses.some(entry => normalizeColumnStatus(entry) === status || normalizeColumnStatus(columnNames[entry] || entry) === status)
+            if (duplicate) { toast.warning('Já existe uma coluna com esse nome.'); return }
+            const custom = unique([...customColumns, status])
+            const deleted = deletedColumns.filter(entry => entry !== status)
+            const names = { ...columnNames, [status]: columnName.trim() }
+            const order = [...statuses]
+            order.splice(Math.min(columnPosition - 1, order.length), 0, status)
+            try {
+              localStorage.setItem(CUSTOM_COLUMNS_KEY, JSON.stringify(custom))
+              localStorage.setItem('cscx-kanban-deleted-columns', JSON.stringify(deleted))
+              localStorage.setItem(NAMES_KEY, JSON.stringify(names))
+              persistOrder(order)
+              setCustomColumns(custom)
+              setDeletedColumns(deleted)
+              setColumnNames(names)
+              setCreatingColumn(false)
+              toast.success('Coluna criada.')
+            } catch { toast.error('Não foi possível criar a coluna no navegador.') }
+            return
+          }
+          if (!editingColumn) return
           const names = { ...columnNames, [editingColumn]: columnName.trim() }
           try {
             localStorage.setItem(NAMES_KEY, JSON.stringify(names))
@@ -495,10 +529,10 @@ export function KanbanPage() {
             toast.success('Coluna atualizada.')
           } catch { toast.error('Não foi possível salvar a coluna no navegador.') }
         }}>
-          <h2 className="font-bold">Editar coluna</h2>
+          <h2 className="font-bold">{creatingColumn ? 'Nova coluna' : 'Editar coluna'}</h2>
           <label className="block text-sm">Nome<input required maxLength={80} value={columnName} onChange={event => setColumnName(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label>
-          <label className="block text-sm">Posição<select value={columnPosition} onChange={event => setColumnPosition(Number(event.target.value))} className="mt-1 w-full rounded-lg border p-2">{statuses.map((_, index) => <option key={index} value={index + 1}>{index + 1}</option>)}</select></label>
-          <button type="button" disabled={items.some(item => (item.status || 'ABERTO') === editingColumn)} title="Mova os chamados antes de excluir a coluna" onClick={() => {
+          <label className="block text-sm">Posição<select value={columnPosition} onChange={event => setColumnPosition(Number(event.target.value))} className="mt-1 w-full rounded-lg border p-2">{Array.from({ length: statuses.length + (creatingColumn ? 1 : 0) }, (_, index) => <option key={index} value={index + 1}>{index + 1}</option>)}</select></label>
+          {editingColumn && <button type="button" disabled={items.some(item => (item.status || 'ABERTO') === editingColumn)} title="Mova os chamados antes de excluir a coluna" onClick={() => {
             const next = unique([...deletedColumns, editingColumn])
             try {
               localStorage.setItem('cscx-kanban-deleted-columns', JSON.stringify(next))
@@ -506,13 +540,14 @@ export function KanbanPage() {
               setEditingColumn(null)
               toast.success('Coluna excluída do quadro.')
             } catch { toast.error('Não foi possível excluir a coluna no navegador.') }
-          }} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 disabled:opacity-40">Excluir coluna</button>
+          }} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 disabled:opacity-40">Excluir coluna</button>}
           {items.some(item => (item.status || 'ABERTO') === editingColumn) && <p className="text-xs text-gray-500">Mova todos os chamados desta coluna antes de excluir.</p>}
-          <div className="flex justify-end gap-2"><button type="button" onClick={() => setEditingColumn(null)} className="rounded-lg border px-3 py-2">Cancelar</button><button className="rounded-lg bg-blue-600 px-3 py-2 text-white">Salvar</button></div>
+          <div className="flex justify-end gap-2"><button type="button" onClick={() => { setEditingColumn(null); setCreatingColumn(false) }} className="rounded-lg border px-3 py-2">Cancelar</button><button className="rounded-lg bg-blue-600 px-3 py-2 text-white">Salvar</button></div>
         </form>
       </div>}
       {selected && (
         <DetailDrawer
+          statusOptions={statuses}
           selected={selected}
           loading={detailLoading}
           note={note}
@@ -572,4 +607,10 @@ function formatPhone(value?: string | null) {
   const phone = String(value || '').replace(/\D/g, '')
   if (phone.length < 10) return phone || '-'
   return `+${phone.slice(0, 2)} ${phone.slice(2, 4)} ${phone.slice(4)}`
+}
+
+function normalizeColumnStatus(name: string) {
+  const status = name.trim().toUpperCase()
+  const key = status.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  return DEFAULT_STATUS_ORDER.find(entry => entry.normalize('NFD').replace(/[\u0300-\u036f]/g, '') === key) || status
 }
