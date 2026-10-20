@@ -9,7 +9,9 @@ const KOMMO_ACCESS_TOKEN = process.env.KOMMO_ACCESS_TOKEN || ''
 const KOMMO_TIMEOUT_MS = Number(process.env.KOMMO_TIMEOUT_MS || 10000)
 
 const CS_PIPELINE_ID = Number(process.env.KOMMO_CS_PIPELINE_ID || 11619839)
-const CS_STATUS_CHAMADO_ABERTO = Number(process.env.KOMMO_CS_STATUS_ID || 89504795)
+export const CS_STATUS_CHAMADO_ABERTO = Number(process.env.KOMMO_CS_STATUS_ID || 89504795)
+// 142 = etapa de ganho do funil ("chamado finalizado")
+export const CS_STATUS_CHAMADO_FINALIZADO = 142
 
 const FIELD_CONTACT_CLIENTE_ID = 1001391
 const FIELD_LEAD_PROTOCOLO = 1005751
@@ -115,6 +117,12 @@ async function createContact({ nome, phone, clid }) {
   if (clid) fields.push({ field_id: FIELD_CONTACT_CLIENTE_ID, values: [{ value: clid }] })
   const data = await kommoRequest('POST', 'contacts', [{ name: nome || phone, custom_fields_values: fields }])
   return data._embedded.contacts[0]
+}
+
+// Mover o lead dispara o Salesbot da etapa de destino (ex.: mensagem de
+// chamado finalizado).
+export async function moverLeadKommo(leadId, statusId) {
+  await kommoRequest('PATCH', `leads/${leadId}`, { pipeline_id: CS_PIPELINE_ID, status_id: statusId })
 }
 
 /**

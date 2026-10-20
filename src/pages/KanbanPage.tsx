@@ -29,6 +29,10 @@ const DEFAULT_STATUS_ORDER = [
   'FINALIZADO',
 ]
 
+// Fazem parte do fluxo com o Kommo (chamado aberto / finalizado): não podem
+// ser renomeadas nem excluídas, só mudar de posição.
+const LOCKED_COLUMNS = ['ABERTO', 'FINALIZADO']
+
 export function KanbanPage() {
   const { getToken } = useAuth()
   const { user } = useUser()
@@ -539,16 +543,17 @@ export function KanbanPage() {
           }
         }}>
           <h2 className="font-bold">{creatingColumn ? 'Nova coluna' : 'Editar coluna'}</h2>
-          <label className="block text-sm">Nome<input required maxLength={80} value={columnName} onChange={event => setColumnName(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label>
+          <label className="block text-sm">Nome<input required maxLength={80} value={columnName} disabled={!!editingColumn && LOCKED_COLUMNS.includes(editingColumn)} onChange={event => setColumnName(event.target.value)} className="mt-1 w-full rounded-lg border p-2 disabled:bg-gray-100 disabled:text-gray-500" /></label>
+          {editingColumn && LOCKED_COLUMNS.includes(editingColumn) && <p className="text-xs text-gray-500">Coluna fixa: faz parte da integração com o Kommo. Só a posição pode ser alterada.</p>}
           <label className="block text-sm">Posição<select value={columnPosition} onChange={event => setColumnPosition(Number(event.target.value))} className="mt-1 w-full rounded-lg border p-2">{Array.from({ length: statuses.length + (creatingColumn ? 1 : 0) }, (_, index) => <option key={index} value={index + 1}>{index + 1}</option>)}</select></label>
-          {editingColumn && <button type="button" disabled={savingColumn || items.some(item => (item.status || 'ABERTO') === editingColumn)} title="Mova os chamados antes de excluir a coluna" onClick={async () => {
+          {editingColumn && !LOCKED_COLUMNS.includes(editingColumn) && <button type="button" disabled={savingColumn || items.some(item => (item.status || 'ABERTO') === editingColumn)} title="Mova os chamados antes de excluir a coluna" onClick={async () => {
             const next = unique([...deletedColumns, editingColumn])
             if (await saveColumnConfig({ ...config, deleted: next, order: statuses.filter(status => status !== editingColumn) })) {
               setEditingColumn(null)
               toast.success('Coluna excluida do quadro.')
             }
           }} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 disabled:opacity-40">Excluir coluna</button>}
-          {items.some(item => (item.status || 'ABERTO') === editingColumn) && <p className="text-xs text-gray-500">Mova todos os chamados desta coluna antes de excluir.</p>}
+          {editingColumn && !LOCKED_COLUMNS.includes(editingColumn) && items.some(item => (item.status || 'ABERTO') === editingColumn) && <p className="text-xs text-gray-500">Mova todos os chamados desta coluna antes de excluir.</p>}
           <div className="flex justify-end gap-2"><button type="button" onClick={() => { setEditingColumn(null); setCreatingColumn(false) }} className="rounded-lg border px-3 py-2">Cancelar</button><button disabled={savingColumn} className="rounded-lg bg-blue-600 px-3 py-2 text-white disabled:opacity-40">{savingColumn ? 'Salvando...' : 'Salvar'}</button></div>
         </form>
       </div>}

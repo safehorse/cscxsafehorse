@@ -3,7 +3,10 @@ import express from 'express'
 import cors from 'cors'
 import pg from 'pg'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
-import { abrirChamadoNoKommo, kommoConfigured } from './kommo.mjs'
+import {
+  abrirChamadoNoKommo, kommoConfigured, moverLeadKommo,
+  CS_STATUS_CHAMADO_ABERTO, CS_STATUS_CHAMADO_FINALIZADO,
+} from './kommo.mjs'
 
 const { Pool } = pg
 
@@ -542,6 +545,8 @@ app.get('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   res.json({ data: { ...atendimento.rows[0], interacoes: interacoes.rows, agenda: agenda.rows } })
 }))
 
+const KANBAN_LOCKED_COLUMNS = ['ABERTO', 'FINALIZADO']
+
 app.get('/api/kanban/config', asyncRoute(async (_req, res) => {
   const { rows } = await pool.query('select config, version from cscx_kanban_config where id = 1')
   res.json(rows[0])
@@ -553,6 +558,12 @@ app.put('/api/kanban/config', asyncRoute(async (req, res) => {
   if (!config || !['order', 'custom', 'deleted'].every(key => validList(config[key])) || !config.names || typeof config.names !== 'object' || Array.isArray(config.names) || Object.keys(config.names).length > 200 || !Object.entries(config.names).every(([key, value]) => key.length <= 80 && typeof value === 'string' && value.trim() && value.length <= 80) || !Number.isInteger(version)) {
     return res.status(400).json({ error: 'Configuracao de colunas invalida.' })
   }
+  // ABERTO e FINALIZADO fazem parte do fluxo com o Kommo: nunca excluídas
+  // nem renomeadas.
+  if (config.deleted.some(status => KANBAN_LOCKED_COLUMNS.includes(status))) {
+    return res.status(400).json({ error: 'As colunas Aberto e Finalizado não podem ser excluídas.' })
+  }
+  for (const status of KANBAN_LOCKED_COLUMNS) delete config.names[status]
   const client = await pool.connect()
   try {
     await client.query('begin')
@@ -661,6 +672,20 @@ async function notificarChamadoNoKommo(atendimento) {
   `, [atendimento.id, resultado.status, resultado.leadId ?? null, resultado.protocolo ?? null, resultado.erro ?? null])
 }
 
+async function moverChamadoNoKommo(atendimento, statusId, kommoStatus) {
+  if (!kommoConfigured() || !atendimento?.kommo_lead_id) return
+  let erro = null
+  try {
+    await moverLeadKommo(atendimento.kommo_lead_id, statusId)
+  } catch (error) {
+    erro = error.message
+  }
+  await pool.query(
+    'update cscx_atendimentos set kommo_status = $2, kommo_erro = $3 where id = $1',
+    [atendimento.id, erro ? 'erro' : kommoStatus, erro],
+  )
+}
+
 app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   const allowed = [
     'data_solicitacao', 'numero_pedido', 'codigo_cliente', 'cliente', 'codigo_produto', 'descricao_produto',
@@ -682,13 +707,13 @@ app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   // Reabrir um chamado finalizado exige motivo + produto (rota /reabrir) -
   // PATCH não pode ser usado pra pular essa exigência (nem via drag no
   // Kanban, nem pelos botões de status do drawer).
+  let previousStatus = null
   if ('status' in req.body) {
     const nextStatus = normalizaStatus(req.body.status)
-    if (nextStatus !== 'FINALIZADO') {
-      const { rows: currentRows } = await pool.query('select status from cscx_atendimentos where id = $1', [req.params.id])
-      if (currentRows[0]?.status === 'FINALIZADO') {
-        return res.status(400).json({ error: 'Chamado finalizado só reabre pela rota de reabertura (motivo + produto).' })
-      }
+    const { rows: currentRows } = await pool.query('select status from cscx_atendimentos where id = $1', [req.params.id])
+    previousStatus = currentRows[0]?.status ?? null
+    if (nextStatus !== 'FINALIZADO' && previousStatus === 'FINALIZADO') {
+      return res.status(400).json({ error: 'Chamado finalizado só reabre pela rota de reabertura (motivo + produto).' })
     }
   }
   values.push(getUserId(req))
@@ -702,6 +727,11 @@ app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   `, values)
   if (!rows[0]) return res.status(404).json({ error: 'Atendimento não encontrado.' })
   res.json({ data: rows[0] })
+  // Lead vai para "chamado finalizado" e o Salesbot da etapa manda a mensagem.
+  if (rows[0].status === 'FINALIZADO' && previousStatus !== 'FINALIZADO') {
+    moverChamadoNoKommo(rows[0], CS_STATUS_CHAMADO_FINALIZADO, 'finalizado')
+      .catch(error => console.error('Kommo: falha ao finalizar chamado', rows[0].id, error))
+  }
 }))
 
 app.delete('/api/atendimentos/:id', asyncRoute(async (req, res) => {
@@ -731,6 +761,10 @@ app.post('/api/atendimentos/:id/reabrir', asyncRoute(async (req, res) => {
     values ($1, 'reabertura', $2, $3, $4, $5)
   `, [req.params.id, motivo, produtoId, produtoDescricao, userId])
   res.json({ data: rows[0] })
+  // Volta o lead para "chamado aberto" (não dispara mensagem: o gatilho de lá
+  // é só para lead criado) para que uma nova finalização mande a mensagem de novo.
+  moverChamadoNoKommo(rows[0], CS_STATUS_CHAMADO_ABERTO, 'reaberto')
+    .catch(error => console.error('Kommo: falha ao reabrir chamado', rows[0].id, error))
 }))
 
 app.post('/api/atendimentos/:id/interacoes', asyncRoute(async (req, res) => {
