@@ -30,7 +30,7 @@ const DEFAULT_STATUS_ORDER = [
 ]
 
 // Fazem parte do fluxo com o Kommo (chamado aberto / finalizado): não podem
-// ser renomeadas nem excluídas, só mudar de posição.
+// ser renomeadas, excluídas nem mudar de posição (Aberto primeiro, Finalizado último).
 const LOCKED_COLUMNS = ['ABERTO', 'FINALIZADO']
 
 export function KanbanPage() {
@@ -231,7 +231,7 @@ export function KanbanPage() {
     if (savingColumn) return false
     setSavingColumn(true)
     try {
-      const saved = await api.saveKanbanConfig(getToken, next, configVersion.current)
+      const saved = await api.saveKanbanConfig(getToken, { ...next, order: pinFlowColumns(next.order) }, configVersion.current)
       setConfig(saved.config)
       configVersion.current = saved.version
       return true
@@ -544,8 +544,8 @@ export function KanbanPage() {
         }}>
           <h2 className="font-bold">{creatingColumn ? 'Nova coluna' : 'Editar coluna'}</h2>
           <label className="block text-sm">Nome<input required maxLength={80} value={columnName} disabled={!!editingColumn && LOCKED_COLUMNS.includes(editingColumn)} onChange={event => setColumnName(event.target.value)} className="mt-1 w-full rounded-lg border p-2 disabled:bg-gray-100 disabled:text-gray-500" /></label>
-          {editingColumn && LOCKED_COLUMNS.includes(editingColumn) && <p className="text-xs text-gray-500">Coluna fixa: faz parte da integração com o Kommo. Só a posição pode ser alterada.</p>}
-          <label className="block text-sm">Posição<select value={columnPosition} onChange={event => setColumnPosition(Number(event.target.value))} className="mt-1 w-full rounded-lg border p-2">{Array.from({ length: statuses.length + (creatingColumn ? 1 : 0) }, (_, index) => <option key={index} value={index + 1}>{index + 1}</option>)}</select></label>
+          {editingColumn && LOCKED_COLUMNS.includes(editingColumn) && <p className="text-xs text-gray-500">Coluna fixa: faz parte da integração com o Kommo. Aberto fica sempre em primeiro e Finalizado sempre em último.</p>}
+          <label className="block text-sm">Posição<select value={columnPosition} disabled={!!editingColumn && LOCKED_COLUMNS.includes(editingColumn)} onChange={event => setColumnPosition(Number(event.target.value))} className="mt-1 w-full rounded-lg border p-2">{Array.from({ length: statuses.length + (creatingColumn ? 1 : 0) }, (_, index) => <option key={index} value={index + 1}>{index + 1}</option>)}</select></label>
           {editingColumn && !LOCKED_COLUMNS.includes(editingColumn) && <button type="button" disabled={savingColumn || items.some(item => (item.status || 'ABERTO') === editingColumn)} title="Mova os chamados antes de excluir a coluna" onClick={async () => {
             const next = unique([...deletedColumns, editingColumn])
             if (await saveColumnConfig({ ...config, deleted: next, order: statuses.filter(status => status !== editingColumn) })) {
@@ -585,7 +585,17 @@ export function KanbanPage() {
 function mergeOrder(savedOrder: string[], statuses: string[]) {
   const known = savedOrder.filter(status => statuses.includes(status))
   const missing = statuses.filter(status => !known.includes(status))
-  return [...known, ...missing]
+  return pinFlowColumns([...known, ...missing])
+}
+
+// Aberto é sempre a primeira coluna e Finalizado a última.
+function pinFlowColumns(order: string[]) {
+  const middle = order.filter(status => !LOCKED_COLUMNS.includes(status))
+  return [
+    ...(order.includes('ABERTO') ? ['ABERTO'] : []),
+    ...middle,
+    ...(order.includes('FINALIZADO') ? ['FINALIZADO'] : []),
+  ]
 }
 
 function arrayMove(items: string[], from: number, to: number) {
