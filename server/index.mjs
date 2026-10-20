@@ -3,6 +3,7 @@ import express from 'express'
 import cors from 'cors'
 import pg from 'pg'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { abrirChamadoNoKommo, kommoConfigured } from './kommo.mjs'
 
 const { Pool } = pg
 
@@ -623,7 +624,42 @@ app.post('/api/atendimentos', asyncRoute(async (req, res) => {
   }
   const inserted = await upsertAtendimento(row, getUserId(req))
   res.status(201).json({ data: inserted })
+  // Roda depois da resposta: o chamado abre mesmo se o Kommo falhar.
+  notificarChamadoNoKommo(inserted).catch(error => console.error('Kommo: falha ao registrar chamado', inserted.id, error))
 }))
+
+async function buscarClientePcp(codigoCliente) {
+  if (!PCP_API_URL || !PCP_API_KEY || !codigoCliente) return null
+  const params = new URLSearchParams({ select: 'codigo,nome,razao,telefone3', codigo: `eq.${codigoCliente}`, limit: '1' })
+  const response = await fetch(`${PCP_API_URL}/rest/v1/clientes?${params.toString()}`, {
+    headers: { apikey: PCP_API_KEY, Authorization: `Bearer ${PCP_API_KEY}` },
+  })
+  if (!response.ok) throw new Error(`Falha ao consultar cliente ${codigoCliente} no PCP (${response.status})`)
+  const rows = await response.json()
+  return Array.isArray(rows) ? rows[0] ?? null : null
+}
+
+async function notificarChamadoNoKommo(atendimento) {
+  if (!kommoConfigured() || !atendimento?.codigo_cliente) return
+  let resultado
+  try {
+    const cliente = await buscarClientePcp(atendimento.codigo_cliente)
+    // telefone3 é o WhatsApp no ERP (mesmo campo usado pelo InvoiceManager)
+    resultado = await abrirChamadoNoKommo({
+      atendimento,
+      telefone: cliente?.telefone3,
+      nomeCliente: atendimento.cliente || cliente?.nome || cliente?.razao,
+    })
+  } catch (error) {
+    resultado = { status: 'erro', erro: error.message }
+  }
+  await pool.query(`
+    update cscx_atendimentos
+    set kommo_status = $2, kommo_lead_id = $3, kommo_protocolo = $4, kommo_erro = $5,
+        kommo_enviado_em = case when $3::bigint is null then kommo_enviado_em else now() end
+    where id = $1
+  `, [atendimento.id, resultado.status, resultado.leadId ?? null, resultado.protocolo ?? null, resultado.erro ?? null])
+}
 
 app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   const allowed = [

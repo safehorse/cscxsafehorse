@@ -36,3 +36,11 @@ psql $env:DATABASE_URL -f database/migrations/021_shared_kanban_columns.sql
 ```
 
 Configuracoes antigas salvas no navegador nao sao importadas automaticamente.
+
+## Integracao Kommo
+
+Ao abrir um chamado, o servidor cria um lead no funil Customer Success (etapa "chamado aberto") e grava o resultado no chamado. Aplique antes de publicar:
+
+```powershell
+psql $env:DATABASE_URL -f database/migrations/022_kommo_chamado.sql
+```
