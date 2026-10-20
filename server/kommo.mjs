@@ -18,6 +18,9 @@ const FIELD_LEAD_PROTOCOLO = 1005751
 const FIELD_LEAD_JA_CONVERSOU = 1005753
 const ENUM_JA_CONVERSOU_SIM = 855389
 const ENUM_JA_CONVERSOU_NAO = 855391
+// "Status chamado": o Salesbot usa nas condições para escolher a mensagem.
+const FIELD_LEAD_STATUS_CHAMADO = 1005755
+export const STATUS_CHAMADO = { aberto: 855393, finalizado: 855395, cancelado: 855397 }
 
 export function kommoConfigured() {
   return Boolean(KOMMO_BASE_URL && KOMMO_ACCESS_TOKEN)
@@ -121,8 +124,12 @@ async function createContact({ nome, phone, clid }) {
 
 // Mover o lead dispara o Salesbot da etapa de destino (ex.: mensagem de
 // chamado finalizado).
-export async function moverLeadKommo(leadId, statusId) {
-  await kommoRequest('PATCH', `leads/${leadId}`, { pipeline_id: CS_PIPELINE_ID, status_id: statusId })
+export async function moverLeadKommo(leadId, statusId, statusChamadoEnumId) {
+  await kommoRequest('PATCH', `leads/${leadId}`, {
+    pipeline_id: CS_PIPELINE_ID,
+    status_id: statusId,
+    custom_fields_values: [{ field_id: FIELD_LEAD_STATUS_CHAMADO, values: [{ enum_id: statusChamadoEnumId }] }],
+  })
 }
 
 /**
@@ -154,6 +161,7 @@ export async function abrirChamadoNoKommo({ atendimento, telefone, nomeCliente }
     custom_fields_values: [
       { field_id: FIELD_LEAD_PROTOCOLO, values: [{ value: protocolo }] },
       { field_id: FIELD_LEAD_JA_CONVERSOU, values: [{ enum_id: jaConversou ? ENUM_JA_CONVERSOU_SIM : ENUM_JA_CONVERSOU_NAO }] },
+      { field_id: FIELD_LEAD_STATUS_CHAMADO, values: [{ enum_id: STATUS_CHAMADO.aberto }] },
     ],
     _embedded: {
       contacts: [{ id: contact.id, is_main: true }],

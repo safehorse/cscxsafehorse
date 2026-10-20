@@ -5,7 +5,7 @@ import pg from 'pg'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import {
   abrirChamadoNoKommo, kommoConfigured, moverLeadKommo,
-  CS_STATUS_CHAMADO_ABERTO, CS_STATUS_CHAMADO_FINALIZADO,
+  CS_STATUS_CHAMADO_ABERTO, CS_STATUS_CHAMADO_FINALIZADO, STATUS_CHAMADO,
 } from './kommo.mjs'
 
 const { Pool } = pg
@@ -672,11 +672,11 @@ async function notificarChamadoNoKommo(atendimento) {
   `, [atendimento.id, resultado.status, resultado.leadId ?? null, resultado.protocolo ?? null, resultado.erro ?? null])
 }
 
-async function moverChamadoNoKommo(atendimento, statusId, kommoStatus) {
+async function moverChamadoNoKommo(atendimento, statusId, statusChamado, kommoStatus) {
   if (!kommoConfigured() || !atendimento?.kommo_lead_id) return
   let erro = null
   try {
-    await moverLeadKommo(atendimento.kommo_lead_id, statusId)
+    await moverLeadKommo(atendimento.kommo_lead_id, statusId, statusChamado)
   } catch (error) {
     erro = error.message
   }
@@ -729,7 +729,7 @@ app.patch('/api/atendimentos/:id', asyncRoute(async (req, res) => {
   res.json({ data: rows[0] })
   // Lead vai para "chamado finalizado" e o Salesbot da etapa manda a mensagem.
   if (rows[0].status === 'FINALIZADO' && previousStatus !== 'FINALIZADO') {
-    moverChamadoNoKommo(rows[0], CS_STATUS_CHAMADO_FINALIZADO, 'finalizado')
+    moverChamadoNoKommo(rows[0], CS_STATUS_CHAMADO_FINALIZADO, STATUS_CHAMADO.finalizado, 'finalizado')
       .catch(error => console.error('Kommo: falha ao finalizar chamado', rows[0].id, error))
   }
 }))
@@ -763,7 +763,7 @@ app.post('/api/atendimentos/:id/reabrir', asyncRoute(async (req, res) => {
   res.json({ data: rows[0] })
   // Volta o lead para "chamado aberto" (não dispara mensagem: o gatilho de lá
   // é só para lead criado) para que uma nova finalização mande a mensagem de novo.
-  moverChamadoNoKommo(rows[0], CS_STATUS_CHAMADO_ABERTO, 'reaberto')
+  moverChamadoNoKommo(rows[0], CS_STATUS_CHAMADO_ABERTO, STATUS_CHAMADO.aberto, 'reaberto')
     .catch(error => console.error('Kommo: falha ao reabrir chamado', rows[0].id, error))
 }))
 
