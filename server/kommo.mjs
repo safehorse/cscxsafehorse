@@ -125,10 +125,14 @@ async function createContact({ nome, phone, clid }) {
 // Mover o lead dispara o Salesbot da etapa de destino (ex.: mensagem de
 // chamado finalizado).
 export async function moverLeadKommo(leadId, statusId, statusChamadoEnumId) {
+  const fields = [{ field_id: FIELD_LEAD_STATUS_CHAMADO, values: [{ enum_id: statusChamadoEnumId }] }]
+  // O Salesbot escolhe a mensagem de abertura por "Ja conversou" (Sim/Nao) e
+  // cai em "Nenhuma das condições" (mensagem de finalizado) quando está vazio.
+  if (statusChamadoEnumId !== STATUS_CHAMADO.aberto) fields.push({ field_id: FIELD_LEAD_JA_CONVERSOU, values: null })
   await kommoRequest('PATCH', `leads/${leadId}`, {
     pipeline_id: CS_PIPELINE_ID,
     status_id: statusId,
-    custom_fields_values: [{ field_id: FIELD_LEAD_STATUS_CHAMADO, values: [{ enum_id: statusChamadoEnumId }] }],
+    custom_fields_values: fields,
   })
 }
 
