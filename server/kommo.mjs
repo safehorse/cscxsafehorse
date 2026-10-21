@@ -105,12 +105,23 @@ async function findContacts({ phone, clid }) {
 
 // Último lead com mensagem recebida do cliente (filtro por contato traz os
 // eventos dos leads ligados a ele).
+// O Kommo recusa (400) filtros com muitos IDs, então consulta em lotes e fica
+// com o evento mais recente.
+const EVENTS_ENTITY_BATCH = 10
+
 async function lastIncomingChatLeadId(contactIds) {
   if (!contactIds.length) return null
-  const params = new URLSearchParams({ limit: '1', 'filter[type][]': 'incoming_chat_message', 'filter[entity]': 'contact' })
-  for (const id of contactIds) params.append('filter[entity_id][]', String(id))
-  const data = await kommoRequest('GET', `events?${params.toString()}`)
-  const event = data?._embedded?.events?.[0]
+  const batches = []
+  for (let i = 0; i < contactIds.length; i += EVENTS_ENTITY_BATCH) {
+    batches.push(contactIds.slice(i, i + EVENTS_ENTITY_BATCH))
+  }
+  const events = await Promise.all(batches.map(async ids => {
+    const params = new URLSearchParams({ limit: '1', 'filter[type][]': 'incoming_chat_message', 'filter[entity]': 'contact' })
+    for (const id of ids) params.append('filter[entity_id][]', String(id))
+    const data = await kommoRequest('GET', `events?${params.toString()}`)
+    return data?._embedded?.events?.[0]
+  }))
+  const event = events.filter(Boolean).sort((a, b) => b.created_at - a.created_at)[0]
   if (!event) return null
   return event.entity_type === 'lead' ? event.entity_id : -1
 }
@@ -148,7 +159,12 @@ export async function abrirChamadoNoKommo({ atendimento, telefone, nomeCliente }
   const protocolo = protocoloChamado(atendimento)
   const { all, clidMatches } = await findContacts({ phone, clid })
 
-  const chatLeadId = await lastIncomingChatLeadId(all.map(contact => contact.id))
+  // Sem o histórico de conversa, segue como "não conversou" em vez de não
+  // abrir o lead.
+  const chatLeadId = await lastIncomingChatLeadId(all.map(contact => contact.id)).catch(error => {
+    console.error('Kommo: falha ao consultar conversas do contato', error.message)
+    return null
+  })
   const jaConversou = chatLeadId !== null
 
   // Prefere o contato que tem a conversa do WhatsApp, depois o do cliente_id,
